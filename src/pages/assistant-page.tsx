@@ -8,7 +8,7 @@ import { Button, Spinner } from '../shared/ui/button';
 import { cn } from '../shared/lib/cn';
 import { EmptyState } from '../shared/ui/feedback';
 import { PageContent, PageHeader } from '../shared/ui/layout';
-import { useAdvisorChat } from '../features/assistant/use-advisor-chat';
+import { useAdvisorChat } from '../app/providers/advisor-chat-provider';
 
 /**
  * El asistente de priorizacion.

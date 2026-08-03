@@ -3,6 +3,7 @@ import { Toaster } from 'sonner';
 import { TooltipProvider } from '@radix-ui/react-tooltip';
 import { useState, type ReactNode } from 'react';
 
+import { AdvisorChatProvider } from './advisor-chat-provider';
 import { AuthProvider } from './auth-provider';
 import { SyncProvider } from './sync-provider';
 import { ThemeProvider } from './theme-provider';
@@ -43,8 +44,13 @@ export const AppProviders = ({ children }: { children: ReactNode }) => {
         <TooltipProvider delayDuration={400} skipDelayDuration={200}>
           <AuthProvider>
             <SyncProvider>
-              {children}
-              <AppToaster />
+              {/* La conversacion con el asistente va AQUI y no en su pantalla: el
+                  enrutador remonta cada vista al cambiar de ruta, asi que tenerla dentro
+                  significaba perderla por mirar Hoy un segundo. */}
+              <AdvisorChatProvider>
+                {children}
+                <AppToaster />
+              </AdvisorChatProvider>
             </SyncProvider>
           </AuthProvider>
         </TooltipProvider>
