@@ -105,6 +105,11 @@ export const TaskList = ({
     );
   }
 
+  /* Entrada escalonada: cada fila arranca 35 ms despues de la anterior, con tope,
+     para que una lista larga no tarde un segundo en aparecer. El contador corre a
+     traves de los grupos, asi la cascada es continua y no reinicia por seccion. */
+  let entranceOrder = 0;
+
   const renderTask = (task: Task) => (
     <TaskItem
       key={task.id}
@@ -112,6 +117,7 @@ export const TaskList = ({
       category={task.categoryId === null ? undefined : categories.get(task.categoryId)}
       tags={tagsOf(task)}
       now={now}
+      entranceDelayMs={Math.min(entranceOrder++ * 35, 320)}
       onOpen={onOpenTask}
       onStartFocus={onStartFocus}
       hideDueDate={hideDueDate}

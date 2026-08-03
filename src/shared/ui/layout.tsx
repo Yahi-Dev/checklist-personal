@@ -14,7 +14,7 @@ export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-[--radius-card] border border-line bg-panel shadow-soft', className)}
+      className={cn('rounded-card border border-line bg-panel shadow-soft', className)}
       {...props}
     />
   ),
@@ -81,7 +81,9 @@ export interface PageHeaderProps {
 export const PageHeader = ({ title, subtitle, actions, children, className }: PageHeaderProps) => (
   <header
     className={cn(
-      'sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur-lg',
+      // Translucida sobre la aurora del lienzo: al desplazar, el contenido se
+      // intuye detras del vidrio en vez de cortarse contra un bloque opaco.
+      'sticky top-0 z-30 border-b border-line/60 bg-canvas/75 backdrop-blur-xl',
       'drag-region pt-safe',
       className,
     )}
@@ -101,10 +103,17 @@ export const PageHeader = ({ title, subtitle, actions, children, className }: Pa
   </header>
 );
 
-/** Contenedor de ancho legible con espacio inferior para la barra de navegacion movil. */
+/**
+ * Contenedor de ancho legible con espacio inferior para la barra de navegacion movil.
+ * `animate-page-in` + el remontaje por ruta del shell = cada pantalla entra con un
+ * fundido que sube, en vez de cambiar de golpe.
+ */
 export const PageContent = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn('mx-auto w-full max-w-3xl px-4 py-4 pb-28 sm:px-6 lg:pb-8', className)}
+    className={cn(
+      'mx-auto w-full max-w-3xl animate-page-in px-4 py-4 pb-28 sm:px-6 lg:pb-8',
+      className,
+    )}
     {...props}
   />
 );

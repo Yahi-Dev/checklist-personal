@@ -72,15 +72,22 @@ export const DialogContent = forwardRef<
       className={cn(
         'fixed z-50 flex flex-col overflow-hidden bg-panel shadow-overlay',
         // En el movil sube desde abajo como una hoja; en escritorio se centra.
-        'animate-sheet-up pb-safe inset-x-0 bottom-0 max-h-[92dvh] rounded-t-2xl',
+        'pb-safe inset-x-0 bottom-0 max-h-[92dvh] animate-sheet-up rounded-t-3xl',
         'sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[85dvh] sm:w-full',
-        'sm:animate-slide-up sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pb-0',
+        'sm:-translate-x-1/2 sm:-translate-y-1/2 sm:animate-slide-up sm:rounded-2xl sm:pb-0',
         'sm:border sm:border-line',
         DIALOG_SIZES[size],
         className,
       )}
       {...props}
     >
+      {/* Asa de la hoja movil: la señal universal de "esto se desliza". Solo
+          decorativa; el cierre real es el boton, Escape o tocar fuera. */}
+      <div
+        className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-line-strong sm:hidden"
+        aria-hidden="true"
+      />
+
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
         <div className="min-w-0 space-y-1">
           {hideTitle === true ? (
@@ -159,7 +166,7 @@ export const ConfirmDialog = ({
     )}
 
     <AlertDialogPrimitive.Portal>
-      <AlertDialogPrimitive.Overlay className="data-[state=open]:animate-fade-in fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" />
+      <AlertDialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px] data-[state=open]:animate-fade-in" />
       <AlertDialogPrimitive.Content
         className={cn(
           'fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm',
@@ -238,7 +245,7 @@ export const DropdownMenuContent = forwardRef<
       collisionPadding={12}
       className={cn(
         'z-50 min-w-52 overflow-hidden rounded-xl border border-line bg-panel p-1',
-        'data-[state=open]:animate-slide-up shadow-overlay',
+        'shadow-overlay data-[state=open]:animate-slide-up',
         className,
       )}
       {...props}

@@ -41,7 +41,9 @@ export const QuickCaptureBar = ({
   autoFocus = false,
   onCreated,
   className,
-  placeholder = 'Añadir tarea... prueba "llamar al banco mañana 10am !alta #pendientes"',
+  // Corto a proposito: en un iPhone (390px) caben ~34 caracteres antes del recorte,
+  // y un ejemplo cortado por la mitad enseña peor que uno breve completo.
+  placeholder = 'Añadir tarea... "pagar la luz mañana 6pm !alta"',
 }: QuickCaptureBarProps) => {
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,12 +105,14 @@ export const QuickCaptureBar = ({
     <form onSubmit={submit} className={cn('space-y-2', className)}>
       <div
         className={cn(
-          'flex items-center gap-2 rounded-[--radius-card] border border-line bg-panel',
-          'px-3 shadow-soft transition-[border-color,box-shadow] duration-150',
-          'focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20',
+          'group flex items-center gap-2 rounded-2xl border border-line bg-panel',
+          'px-3 shadow-soft transition-[border-color,box-shadow,transform] duration-200',
+          // Al enfocar, el campo se enciende con un halo del acento: la puerta
+          // principal de la app tiene que sentirse como tal.
+          'focus-within:-translate-y-px focus-within:border-brand-400 focus-within:shadow-glow',
         )}
       >
-        <Plus className="size-5 shrink-0 text-ink-muted" />
+        <Plus className="size-5 shrink-0 text-ink-muted transition-colors duration-200 group-focus-within:text-brand-500" />
 
         <input
           ref={inputRef}
@@ -140,7 +144,7 @@ export const QuickCaptureBar = ({
       </div>
 
       {preview !== null && preview.tokens.length > 0 && (
-        <div className="animate-fade-in flex flex-wrap items-center gap-1.5 px-1">
+        <div className="flex animate-fade-in flex-wrap items-center gap-1.5 px-1">
           <span className="text-xs text-ink-muted">Se entiende:</span>
 
           {preview.dueAt !== null && (

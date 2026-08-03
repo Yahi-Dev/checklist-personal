@@ -115,7 +115,7 @@ export const CalendarPage = () => {
       </PageHeader>
 
       <PageContent>
-        <div className="rounded-[--radius-card] border border-line bg-panel p-2 shadow-soft">
+        <div className="rounded-card border border-line bg-panel p-2 shadow-soft">
           <div className="grid grid-cols-7 gap-1 pb-1">
             {WEEKDAY_HEADERS.map((label, index) => (
               <div

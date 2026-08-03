@@ -47,7 +47,12 @@ jobs:
           # GitHub Pages sirve el proyecto bajo /<repo>/, no en la raiz.
           VITE_PUBLIC_BASE: /${{ github.event.repository.name }}/
 
+      # `enablement: true` activa GitHub Pages via API en el primer despliegue.
+      # Sin esto, el flujo falla hasta que alguien entre a Settings -> Pages a
+      # habilitarlo a mano (que es exactamente lo que paso en los primeros runs).
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -1,4 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
+import { useId } from 'react';
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { cn } from '../lib/cn';
@@ -65,8 +66,10 @@ export const Progress = ({ value, className, label, tone = 'brand' }: ProgressPr
     >
       <div
         className={cn(
-          'h-full rounded-full transition-[width] duration-300 ease-out',
-          tone === 'success' ? 'bg-success' : 'bg-brand-500',
+          // El resorte hace que la barra "aterrice" al completar una subtarea en
+          // vez de deslizarse sin caracter.
+          'h-full rounded-full transition-[width] duration-500 ease-spring',
+          tone === 'success' ? 'bg-success' : 'bg-linear-to-r from-brand-400 to-brand-500',
         )}
         style={{ width: `${percentage}%` }}
       />
@@ -95,9 +98,23 @@ export const RingProgress = ({
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.min(Math.max(value, 0), 1);
 
+  // Los ids de un <linearGradient> son globales al documento: con dos anillos en
+  // pantalla, un id fijo haria que ambos pintaran con el gradiente del primero.
+  const gradientId = useId();
+
   return (
     <div className={cn('relative inline-flex items-center justify-center', className)}>
       <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <defs>
+          {/* Degradado del acento a lo largo del arco: el anillo plano de un solo
+              color se ve de herramienta; este se ve de producto. Los stops leen las
+              variables del tema, asi que siguen al modo claro/oscuro solos. */}
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style={{ stopColor: 'var(--color-brand-400)' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--color-brand-600)' }} />
+          </linearGradient>
+        </defs>
+
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -105,19 +122,21 @@ export const RingProgress = ({
           fill="none"
           stroke="currentColor"
           strokeWidth={strokeWidth}
-          className="text-sunken"
+          // `line` y no `sunken`: en oscuro, sunken es MAS oscuro que el lienzo y la
+          // pista desaparecia; el color de borde queda visible en ambos temas.
+          className="text-line"
         />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="currentColor"
+          stroke={`url(#${gradientId})`}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - clamped)}
-          className="text-brand-500 transition-[stroke-dashoffset] duration-500 ease-linear"
+          className="transition-[stroke-dashoffset] duration-500 ease-linear"
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
@@ -140,7 +159,7 @@ export const Skeleton = ({ className, ...props }: HTMLAttributes<HTMLDivElement>
 export const TaskListSkeleton = ({ count = 4 }: { count?: number }) => (
   <div className="space-y-2" aria-busy="true" aria-label="Cargando tareas">
     {Array.from({ length: count }, (_, index) => (
-      <div key={index} className="flex items-start gap-3 rounded-[--radius-card] bg-panel p-3.5">
+      <div key={index} className="flex items-start gap-3 rounded-card bg-panel p-3.5">
         <Skeleton className="size-5 shrink-0 rounded-md" />
         <div className="flex-1 space-y-2">
           <Skeleton className="h-4" style={{ width: `${55 + ((index * 13) % 35)}%` }} />
@@ -175,7 +194,16 @@ export const EmptyState = ({ icon, title, description, action, className }: Empt
     )}
   >
     {icon !== undefined && (
-      <div className="flex size-14 items-center justify-center rounded-2xl bg-sunken text-ink-muted [&_svg]:size-7">
+      // La burbuja flota despacio: un vacio que respira invita a llenar; uno
+      // congelado parece un error.
+      <div
+        className={cn(
+          'flex size-16 animate-float items-center justify-center rounded-3xl shadow-soft',
+          'bg-linear-to-br from-brand-100 to-brand-50 text-brand-500',
+          'dark:from-brand-900/40 dark:to-brand-800/20 dark:text-brand-300',
+          '[&_svg]:size-7',
+        )}
+      >
         {icon}
       </div>
     )}

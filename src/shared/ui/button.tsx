@@ -18,16 +18,23 @@ import { cn } from '../lib/cn';
 const buttonVariants = cva(
   cn(
     'inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap',
-    'transition-[background-color,color,box-shadow,transform] duration-150',
+    // El resorte (--ease-spring) hace que el pulsado se sienta fisico: el boton
+    // cede al presionar y vuelve con un rebote minimo.
+    'transition-[background-color,color,box-shadow,transform] duration-200 ease-spring',
     'disabled:pointer-events-none disabled:opacity-45',
-    'active:scale-[0.98]',
+    'active:scale-[0.97]',
     "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   ),
   {
     variants: {
       variant: {
-        primary: 'bg-brand-600 text-white shadow-soft hover:bg-brand-700 active:bg-brand-800',
-        secondary: 'border border-line bg-sunken text-ink hover:bg-hover',
+        // Degradado vertical sutil: da volumen sin parecer boton de 2010.
+        primary: cn(
+          'bg-linear-to-b from-brand-500 to-brand-600 text-white shadow-soft',
+          'hover:from-brand-600 hover:to-brand-700 hover:shadow-raised',
+          'active:from-brand-700 active:to-brand-700',
+        ),
+        secondary: 'border border-line bg-panel text-ink shadow-soft hover:bg-hover',
         ghost: 'text-ink-soft hover:bg-hover hover:text-ink',
         outline: 'border border-line-strong bg-transparent text-ink hover:bg-hover',
         danger: 'bg-danger text-white hover:brightness-110 active:brightness-95',
@@ -36,10 +43,10 @@ const buttonVariants = cva(
       },
       size: {
         // 44px es el minimo tactil recomendado por Apple: mas pequeño se falla al tocar.
-        sm: 'h-8 rounded-[--radius-control] px-3 text-sm',
-        md: 'h-10 rounded-[--radius-control] px-4 text-sm',
+        sm: 'h-8 rounded-control px-3 text-sm',
+        md: 'h-10 rounded-control px-4 text-sm',
         lg: 'h-11 rounded-xl px-5 text-base',
-        icon: 'size-10 rounded-[--radius-control]',
+        icon: 'size-10 rounded-control',
         'icon-sm': 'size-8 rounded-lg',
         'icon-lg': 'size-11 rounded-xl',
       },

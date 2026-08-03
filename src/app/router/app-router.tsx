@@ -89,7 +89,7 @@ export const AppRouter = () => {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-canvas">
+      <div className="flex min-h-dvh items-center justify-center">
         <Spinner className="size-6 text-brand-500" />
       </div>
     );

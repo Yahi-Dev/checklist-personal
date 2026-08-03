@@ -81,7 +81,14 @@ export const FocusPage = () => {
             {FOCUS_MODE_LABEL[timer.mode]}
           </Badge>
 
-          <RingProgress value={timer.progress} size={260} strokeWidth={12}>
+          {/* El anillo respira mientras corre el bloque: un recordatorio periferico
+              de que el tiempo avanza, sin numeros parpadeando. */}
+          <RingProgress
+            value={timer.progress}
+            size={260}
+            strokeWidth={12}
+            className={cn(timer.status === 'running' && 'animate-breathe')}
+          >
             <span className="font-mono text-5xl font-semibold tracking-tight text-ink tabular-nums">
               {formatDuration(timer.remainingSeconds)}
             </span>

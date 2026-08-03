@@ -270,9 +270,9 @@ const TaskDetailContent = ({ task, onOpenChange }: TaskDetailContentProps) => {
                   <Flag
                     className={cn(
                       'size-3.5',
-                      priority === 'high' && 'text-[--color-priority-high]',
-                      priority === 'medium' && 'text-[--color-priority-medium]',
-                      priority === 'low' && 'text-[--color-priority-low]',
+                      priority === 'high' && 'text-priority-high',
+                      priority === 'medium' && 'text-priority-medium',
+                      priority === 'low' && 'text-priority-low',
                     )}
                   />
                   {PRIORITY_LABEL[priority]}

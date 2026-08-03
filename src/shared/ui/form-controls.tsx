@@ -48,7 +48,7 @@ Label.displayName = 'Label';
 // ---------------------------------------------------------------------------
 
 const fieldStyles = cn(
-  'w-full rounded-[--radius-control] border border-line bg-panel px-3 text-ink',
+  'w-full rounded-control border border-line bg-panel px-3 text-ink',
   'placeholder:text-ink-muted',
   'transition-[border-color,box-shadow] duration-150',
   'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none',
@@ -106,7 +106,9 @@ export const Checkbox = forwardRef<
       'focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:outline-none',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'data-[state=checked]:border-brand-600 data-[state=checked]:bg-brand-600',
-      'data-[state=checked]:text-white',
+      // El pop al marcar es LA micro-interaccion de una app de tareas: completar
+      // algo tiene que sentirse como un pequeño premio, no como un cambio de estado.
+      'data-[state=checked]:animate-pop data-[state=checked]:text-white',
       className,
     )}
     {...props}
@@ -164,7 +166,7 @@ export const SelectTrigger = forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-10 w-full items-center justify-between gap-2 rounded-[--radius-control]',
+      'flex h-10 w-full items-center justify-between gap-2 rounded-control',
       'border border-line bg-panel px-3 text-sm text-ink',
       'transition-[border-color,box-shadow] duration-150',
       'focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none',

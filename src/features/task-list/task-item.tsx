@@ -60,6 +60,12 @@ export interface TaskItemProps {
    * "vencida" se quedaria congelado en el momento del primer render.
    */
   now: number;
+  /**
+   * Retardo de la animacion de entrada, para el escalonado de la lista.
+   * Solo importa en el montaje: las actualizaciones posteriores no la reproducen,
+   * asi que el comparador de memo lo ignora a proposito.
+   */
+  entranceDelayMs?: number;
   onOpen?: (task: Task) => void;
   onStartFocus?: (task: Task) => void;
   /** Oculta la fecha: util en vistas ya agrupadas por dia. */
@@ -77,8 +83,9 @@ const SNOOZE_PRESETS: readonly SnoozePreset[] = [
 ];
 
 const PRIORITY_BAR: Record<Task['priority'], string> = {
-  high: 'bg-[--color-priority-high]',
-  medium: 'bg-[--color-priority-medium]',
+  high: 'bg-priority-high',
+  medium: 'bg-priority-medium',
+  // La prioridad baja no marca nada: la calma tambien es informacion.
   low: 'bg-transparent',
 };
 
@@ -88,6 +95,7 @@ export const TaskItem = memo(
     category,
     tags = [],
     now,
+    entranceDelayMs = 0,
     onOpen,
     onStartFocus,
     hideDueDate = false,
@@ -119,18 +127,24 @@ export const TaskItem = memo(
     return (
       <div
         className={cn(
-          'group relative flex items-start gap-3 overflow-hidden rounded-[--radius-card]',
-          'border border-line bg-panel p-3.5 shadow-soft',
-          'transition-[opacity,transform,box-shadow] duration-200',
-          'hover:shadow-raised',
-          isCompleting && 'scale-[0.99] opacity-0',
+          'group relative flex animate-rise-in items-start gap-3 rounded-card',
+          'border border-line/70 bg-panel p-3.5 shadow-soft',
+          'transition-[opacity,transform,box-shadow,border-color] duration-200 ease-spring',
+          // La tarjeta se despega un pelin al pasar por encima: invita a tocar.
+          'hover:-translate-y-0.5 hover:border-line hover:shadow-raised',
+          isCompleting && 'scale-[0.98] opacity-0',
           isCompleted && 'opacity-60',
           className,
         )}
+        style={entranceDelayMs > 0 ? { animationDelay: `${entranceDelayMs}ms` } : undefined}
       >
-        {/* Franja de prioridad: se lee de reojo, sin necesidad de decodificar un icono. */}
+        {/* Franja de prioridad como pildora flotante: se lee de reojo sin cortar el
+            radio de la tarjeta como haria una franja de borde a borde. */}
         <span
-          className={cn('absolute inset-y-0 left-0 w-1', PRIORITY_BAR[task.priority])}
+          className={cn(
+            'absolute top-3.5 bottom-3.5 left-1.5 w-1 rounded-full',
+            PRIORITY_BAR[task.priority],
+          )}
           aria-hidden="true"
         />
 
@@ -146,23 +160,17 @@ export const TaskItem = memo(
           onClick={() => onOpen?.(task)}
           className="min-w-0 flex-1 space-y-1.5 text-left"
         >
-          <div className="flex items-start gap-1.5">
-            <span
-              className={cn(
-                'min-w-0 flex-1 text-[15px] leading-snug text-ink',
-                (isCompleted || isCompleting) && 'strike-in text-ink-muted',
-              )}
-            >
-              {task.title}
-            </span>
-
-            {task.isImportant && (
-              <Star
-                className="mt-0.5 size-4 shrink-0 fill-warning text-warning"
-                aria-label="Destacada"
-              />
+          {/* La marca de destacada NO se repite aqui: el boton de estrella de la
+              derecha ya queda fijo y relleno cuando la tarea lo esta. En la primera
+              pasada visual salian dos estrellas juntas y parecia un error. */}
+          <span
+            className={cn(
+              'block min-w-0 text-[15px] leading-snug text-ink',
+              (isCompleted || isCompleting) && 'strike-in text-ink-muted',
             )}
-          </div>
+          >
+            {task.title}
+          </span>
 
           {task.notes !== null && (
             <p className="line-clamp-1 text-xs text-ink-muted">{task.notes}</p>
@@ -330,9 +338,9 @@ export const TaskDot = ({ task }: { task: Task }) => (
       task.status === 'completed'
         ? 'bg-ink-muted'
         : task.priority === 'high'
-          ? 'bg-[--color-priority-high]'
+          ? 'bg-priority-high'
           : task.priority === 'medium'
-            ? 'bg-[--color-priority-medium]'
+            ? 'bg-priority-medium'
             : 'bg-brand-400',
     )}
     aria-hidden="true"

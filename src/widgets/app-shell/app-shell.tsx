@@ -16,6 +16,10 @@ import { useAllTasks } from '../../shared/hooks/use-live-query';
  *
  * El contador de la vista de Hoy se calcula con la MISMA specification que usa la
  * pantalla, asi que no puede decir "3" mientras la lista enseña cuatro tareas.
+ *
+ * El fondo del shell es TRANSPARENTE a proposito: el color del lienzo lo pinta el
+ * body, y la aurora ambiental (body::before) se transparenta por las zonas de
+ * contenido. Un `bg-canvas` opaco aqui la taparia entera.
  */
 
 interface NavigationEntry {
@@ -36,6 +40,8 @@ const NAVIGATION: readonly NavigationEntry[] = [
   { to: '/ajustes', label: 'Ajustes', icon: Settings, primary: true },
 ];
 
+const PRIMARY_NAVIGATION = NAVIGATION.filter((entry) => entry.primary);
+
 export const AppShell = () => {
   const tasks = useAllTasks();
   const location = useLocation();
@@ -46,12 +52,22 @@ export const AppShell = () => {
     return tasks.filter((task) => spec.isSatisfiedBy(task)).length;
   }, [tasks]);
 
+  /**
+   * Indice del destino activo en la barra inferior. Alimenta la pildora deslizante:
+   * en vez de que cada pestaña encienda su propio fondo, UNA pildora viaja de un
+   * destino al siguiente con un resorte. Es el detalle que hace la navegacion viva.
+   * -1 cuando la ruta activa no esta en la barra (ej. /enfoque desde escritorio).
+   */
+  const activeMobileIndex = PRIMARY_NAVIGATION.findIndex((entry) =>
+    location.pathname.startsWith(entry.to),
+  );
+
   return (
-    <div className="flex min-h-dvh bg-canvas">
+    <div className="flex min-h-dvh">
       {/* ---------------- Barra lateral (escritorio) ---------------- */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-panel lg:flex">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-line/70 bg-panel/70 backdrop-blur-xl lg:flex">
         <div className="drag-region flex items-center gap-2.5 px-5 pt-6 pb-4">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-brand-600 text-white">
+          <div className="flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-soft">
             <CheckSquare className="size-4.5" strokeWidth={2.5} />
           </div>
           <span className="text-sm font-semibold tracking-tight text-ink">Checklist</span>
@@ -64,25 +80,41 @@ export const AppShell = () => {
               to={entry.to}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
+                  'transition-colors duration-200',
                   isActive
-                    ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200'
+                    ? 'bg-brand-600/10 text-brand-700 dark:bg-brand-400/10 dark:text-brand-300'
                     : 'text-ink-soft hover:bg-hover hover:text-ink',
                 )
               }
             >
-              <entry.icon className="size-4.5 shrink-0" />
-              <span className="flex-1">{entry.label}</span>
-              {entry.to === '/hoy' && todayCount > 0 && (
-                <span className="rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white tabular-nums">
-                  {todayCount}
-                </span>
+              {({ isActive }) => (
+                <>
+                  {/* Testigo lateral del destino activo. */}
+                  {isActive && (
+                    <span
+                      className="absolute top-1/2 left-0 h-4 w-1 -translate-y-1/2 animate-fade-in rounded-full bg-brand-500"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <entry.icon className="size-4.5 shrink-0" />
+                  <span className="flex-1">{entry.label}</span>
+                  {entry.to === '/hoy' && todayCount > 0 && (
+                    // `key` remonta el badge cuando cambia la cifra: el pop avisa del cambio.
+                    <span
+                      key={todayCount}
+                      className="animate-pop rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white tabular-nums"
+                    >
+                      {todayCount}
+                    </span>
+                  )}
+                </>
               )}
             </NavLink>
           ))}
         </nav>
 
-        <div className="border-t border-line p-3">
+        <div className="border-t border-line/70 p-3">
           <SyncIndicator />
         </div>
       </aside>
@@ -99,32 +131,54 @@ export const AppShell = () => {
       {/* ---------------- Barra inferior (movil) ---------------- */}
       <nav
         className={cn(
-          'fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur-lg',
+          'fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-panel/90 backdrop-blur-xl',
           'pb-safe lg:hidden',
         )}
         aria-label="Navegacion principal"
       >
-        <div className="flex items-stretch justify-around">
-          {NAVIGATION.filter((entry) => entry.primary).map((entry) => (
+        <div className="relative flex items-stretch justify-around">
+          {/* La pildora deslizante. Ocupa exactamente un quinto y viaja por transform,
+              que anima en el compositor sin relayout. Decorativa: los lectores de
+              pantalla ya tienen aria-current en el NavLink activo. */}
+          {activeMobileIndex >= 0 && (
+            <span
+              className="pointer-events-none absolute inset-y-0 left-0 transition-transform duration-300 ease-spring"
+              style={{
+                width: `${100 / PRIMARY_NAVIGATION.length}%`,
+                transform: `translateX(${activeMobileIndex * 100}%)`,
+              }}
+              aria-hidden="true"
+            >
+              <span className="absolute inset-x-2 inset-y-1.5 rounded-2xl bg-brand-600/10 dark:bg-brand-400/15" />
+            </span>
+          )}
+
+          {PRIMARY_NAVIGATION.map((entry) => (
             <NavLink
               key={entry.to}
               to={entry.to}
               className={({ isActive }) =>
                 cn(
                   'relative flex flex-1 flex-col items-center gap-0.5 py-2.5',
-                  'text-[10px] font-medium transition-colors',
-                  isActive ? 'text-brand-600 dark:text-brand-400' : 'text-ink-muted',
+                  'text-[10px] font-medium transition-colors duration-200',
+                  isActive ? 'text-brand-600 dark:text-brand-300' : 'text-ink-muted',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <span className="relative">
+                  <span
+                    className={cn(
+                      'relative transition-transform duration-300 ease-spring',
+                      isActive && '-translate-y-px',
+                    )}
+                  >
                     <entry.icon className="size-5.5" strokeWidth={isActive ? 2.4 : 2} />
                     {entry.to === '/hoy' && todayCount > 0 && (
                       <span
+                        key={todayCount}
                         className={cn(
-                          'absolute -top-1 -right-2 min-w-4 rounded-full bg-brand-600 px-1',
+                          'absolute -top-1 -right-2 min-w-4 animate-pop rounded-full bg-brand-600 px-1',
                           'text-[9px] leading-4 font-bold text-white tabular-nums',
                         )}
                       >

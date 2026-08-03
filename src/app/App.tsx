@@ -99,7 +99,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
     if (this.state.error === null) return this.props.children;
 
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-canvas px-6 text-center">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="space-y-2">
           <h1 className="text-lg font-semibold text-ink">Algo se rompio</h1>
           <p className="max-w-sm text-sm text-balance text-ink-soft">
