@@ -43,6 +43,17 @@ const EFFORT = 'medium';
 /** Con streaming no hay riesgo de timeout, asi que el tope solo acota el gasto. */
 const MAX_TOKENS = 8000;
 
+/**
+ * Reserva de modelo.
+ *
+ * Si los clasificadores de seguridad declinan la peticion, Anthropic la reintenta sola
+ * en el modelo que corresponda en vez de devolver un rechazo. Priorizar tareas
+ * domesticas no es terreno de rechazos, pero un falso positivo cuesta un turno perdido
+ * y activarlo no cuesta nada. Como sigue en beta, el codigo reintenta sin ella si el
+ * servidor la rechaza: el asistente tiene que seguir contestando, no caerse entero.
+ */
+const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+
 /** Limites de entrada. La funcion esta autenticada, pero autenticado no es de fiar. */
 const MAX_MESSAGES = 30;
 const MAX_MESSAGE_CHARS = 4000;
@@ -302,8 +313,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
 
-      try {
-        const run = await openStream(anthropic, params, abort.signal);
+      let emitted = 0;
+
+      /**
+       * Una pasada completa contra el modelo.
+       *
+       * `stream()` devuelve el objeto de forma SINCRONA: la peticion se resuelve al
+       * iterarlo, asi que un 400 no aparece al crearlo sino aqui dentro. Por eso el
+       * intento entero -crear, iterar y cerrar- vive en la misma funcion, y no solo
+       * la creacion: de lo contrario el reintento de mas abajo nunca llegaria a
+       * dispararse.
+       */
+      const attempt = async (withFallbacks: boolean) => {
+        const run = anthropic.beta.messages.stream(
+          withFallbacks ? { ...params, betas: [FALLBACK_BETA], fallbacks: 'default' } : params,
+          { signal: abort.signal },
+        );
 
         for await (const chunk of run) {
           if (
@@ -311,6 +336,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
             chunk.delta.type === 'text_delta' &&
             chunk.delta.text !== ''
           ) {
+            emitted += 1;
             send({ type: 'text', text: chunk.delta.text });
           }
         }
@@ -318,7 +344,23 @@ Deno.serve(async (request: Request): Promise<Response> => {
         // El plan se emite entero al final y no trozo a trozo. Un JSON de herramienta a
         // medias no se puede parsear, y una tarjeta que se va rellenando sola mientras
         // el modelo se lo repiensa es peor de leer que una que aparece ya hecha.
-        const final = await run.finalMessage();
+        return await run.finalMessage();
+      };
+
+      try {
+        let final;
+
+        try {
+          final = await attempt(true);
+        } catch (cause) {
+          // Solo se reintenta si no salio nada por el cable. Un 400 de validacion llega
+          // antes de generar, asi que en la practica siempre se cumple; la condicion
+          // esta para que un fallo tardio no repita texto ya escrito en pantalla.
+          if (!isBadRequest(cause) || emitted > 0) throw cause;
+
+          console.warn('Reserva de modelo rechazada, se reintenta sin ella:', describe(cause));
+          final = await attempt(false);
+        }
 
         if (final.stop_reason === 'refusal') {
           send({
@@ -359,34 +401,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
     },
   });
 });
-
-// --- Llamada al modelo -----------------------------------------------------
-
-/**
- * Abre el flujo con reserva de modelo activada, y reintenta sin ella si el servidor
- * la rechaza.
- *
- * `fallbacks: 'default'` hace que, si los clasificadores de seguridad declinan la
- * peticion, Anthropic la reintente solo en el modelo que corresponda en vez de
- * devolver un rechazo. Priorizar tareas domesticas no es terreno de rechazos, pero un
- * falso positivo cuesta un turno perdido y esto no cuesta nada.
- *
- * El reintento sin la cabecera beta esta porque es una funcion en beta: si algun dia
- * deja de aceptarse, el asistente tiene que seguir contestando, no caerse entero.
- */
-// deno-lint-ignore no-explicit-any
-const openStream = async (anthropic: Anthropic, params: any, signal: AbortSignal) => {
-  try {
-    return await anthropic.beta.messages.stream(
-      { ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' },
-      { signal },
-    );
-  } catch (cause) {
-    if (!isBadRequest(cause)) throw cause;
-    console.warn('Reserva de modelo rechazada, se reintenta sin ella:', describe(cause));
-    return await anthropic.beta.messages.stream(params, { signal });
-  }
-};
 
 // --- Construccion de la conversacion --------------------------------------
 
