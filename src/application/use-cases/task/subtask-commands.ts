@@ -147,15 +147,46 @@ export class ReorderSubtaskUseCase implements UseCase<ReorderSubtaskCommand, Tas
 
     const position = positionBetween(previous, next);
 
-    const subtasks =
-      position !== null
-        ? task.subtasks.map((subtask) =>
-            subtask.id === command.subtaskId ? { ...subtask, position, updatedAt: now } : subtask,
-          )
-        : rebalance(
-            [...task.subtasks].sort((a, b) => a.position - b.position),
-            (subtask, newPosition) => ({ ...subtask, position: newPosition, updatedAt: now }),
-          );
+    // Camino normal: cabe un hueco entre las vecinas y solo se toca la subtarea movida.
+    if (position !== null) {
+      const subtasks = task.subtasks.map((subtask) =>
+        subtask.id === command.subtaskId ? { ...subtask, position, updatedAt: now } : subtask,
+      );
+      return this.context.tasks.save(replaceSubtasks(task, subtasks, now));
+    }
+
+    /**
+     * Sin hueco entre las vecinas hay que repartir posiciones nuevas, y el orden que se
+     * reparte tiene que ser el orden DESEADO, no el actual.
+     *
+     * Antes se rebalanceaba `task.subtasks` ordenado por su posicion de ese momento, o
+     * sea el orden de ANTES de mover: la subtarea se quedaba donde estaba y la accion no
+     * hacia nada, sin ningun error. Pasaba desapercibido porque no habia forma de
+     * reordenar desde la interfaz; en cuanto la hay, mover repetidamente entre las
+     * mismas dos vecinas acaba agotando el hueco y cayendo justo aqui.
+     */
+    const ordered = [...task.subtasks].sort((a, b) => a.position - b.position);
+    const moving = ordered.find((subtask) => subtask.id === command.subtaskId);
+
+    if (moving === undefined) {
+      return err(DomainErrors.notFound('Esa subtarea no existe en la tarea.'));
+    }
+
+    const rest = ordered.filter((subtask) => subtask.id !== command.subtaskId);
+    const target =
+      command.previousSubtaskId === null
+        ? 0
+        : rest.findIndex((subtask) => subtask.id === command.previousSubtaskId) + 1;
+
+    // `findIndex` devuelve -1 si la vecina no existe; ahi el +1 da 0 y va al principio,
+    // que es un destino sensato para una referencia que ya no esta.
+    rest.splice(Math.max(0, target), 0, moving);
+
+    const subtasks = rebalance(rest, (subtask, newPosition) => ({
+      ...subtask,
+      position: newPosition,
+      updatedAt: now,
+    }));
 
     return this.context.tasks.save(replaceSubtasks(task, subtasks, now));
   }

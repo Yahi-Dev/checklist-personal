@@ -3,7 +3,8 @@ import {
   ArchiveRestore,
   ExternalLink,
   Flag,
-  GripVertical,
+  ChevronDown,
+  ChevronUp,
   Link2,
   Paperclip,
   Plus,
@@ -109,6 +110,38 @@ const TaskDetailContent = ({ task, onOpenChange }: TaskDetailContentProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const progress = useMemo(() => subtaskProgress(task.subtasks), [task.subtasks]);
+
+  const orderedSubtasks = useMemo(
+    () => [...task.subtasks].sort((a, b) => a.position - b.position),
+    [task.subtasks],
+  );
+
+  /**
+   * Mueve una subtarea un puesto arriba (`direction` -1) o abajo (+1).
+   *
+   * El reordenado es por indexacion fraccionaria: no se guarda una lista de indices sino
+   * una posicion ENTRE las dos vecinas del destino. Por eso hay que mirar dos puestos
+   * mas alla en el sentido del movimiento, no uno: al subir, el destino queda entre la
+   * de dos por encima y la que hasta ahora estaba justo encima.
+   */
+  const moveSubtask = async (index: number, direction: -1 | 1): Promise<void> => {
+    const target = index + direction;
+    if (target < 0 || target >= orderedSubtasks.length) return;
+
+    const subtask = orderedSubtasks[index];
+    if (subtask === undefined) return;
+
+    const previous =
+      direction === -1
+        ? (orderedSubtasks[index - 2]?.id ?? null)
+        : (orderedSubtasks[index + 1]?.id ?? null);
+    const next =
+      direction === -1
+        ? (orderedSubtasks[index - 1]?.id ?? null)
+        : (orderedSubtasks[index + 2]?.id ?? null);
+
+    await actions.reorderSubtask(task.id, subtask.id, previous, next);
+  };
 
   const patch = (changes: Omit<UpdateTaskCommand, 'taskId'>) =>
     void actions.update({ taskId: task.id, ...changes });
@@ -385,46 +418,75 @@ const TaskDetailContent = ({ task, onOpenChange }: TaskDetailContentProps) => {
             )}
 
             <ul className="space-y-1">
-              {[...task.subtasks]
-                .sort((a, b) => a.position - b.position)
-                .map((subtask) => (
-                  <li
-                    key={subtask.id}
-                    className="group flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-hover"
-                  >
-                    <GripVertical className="size-3.5 shrink-0 text-ink-muted opacity-0 group-hover:opacity-100" />
-                    <Checkbox
-                      checked={subtask.isDone}
-                      onCheckedChange={() => void actions.toggleSubtask(task.id, subtask.id)}
-                      className="size-4"
-                      aria-label={subtask.title}
-                    />
-                    <input
-                      defaultValue={subtask.title}
-                      onBlur={(event) => {
-                        const value = event.target.value.trim();
-                        if (value.length > 0 && value !== subtask.title) {
-                          void actions.renameSubtask(task.id, subtask.id, value);
-                        } else if (value.length === 0) {
-                          event.target.value = subtask.title;
-                        }
-                      }}
+              {orderedSubtasks.map((subtask, index) => (
+                <li
+                  key={subtask.id}
+                  className="group flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-hover"
+                >
+                  {/* Subir y bajar en vez de arrastrar.
+                        Aqui habia un asa de arrastre que no hacia NADA: prometia un gesto
+                        que nadie habia conectado. Se sustituye por dos botones y no por
+                        arrastre de verdad porque esta app se usa sobre todo en el movil,
+                        donde el arrastre nativo de HTML no existe; ademas estos funcionan
+                        con teclado y con lector de pantalla, que el asa tampoco haria. */}
+                  <div className="flex shrink-0 flex-col">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => void moveSubtask(index, -1)}
+                      aria-label={`Subir ${subtask.title}`}
                       className={cn(
-                        'flex-1 bg-transparent text-sm text-ink outline-none',
-                        subtask.isDone && 'text-ink-muted line-through',
+                        'flex h-3.5 w-4 items-center justify-center rounded text-ink-muted',
+                        'transition-colors hover:text-ink disabled:opacity-25 disabled:hover:text-ink-muted',
                       )}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="opacity-0 group-hover:opacity-100"
-                      onClick={() => void actions.removeSubtask(task.id, subtask.id)}
-                      aria-label={`Borrar ${subtask.title}`}
                     >
-                      <X className="size-3.5" />
-                    </Button>
-                  </li>
-                ))}
+                      <ChevronUp className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === orderedSubtasks.length - 1}
+                      onClick={() => void moveSubtask(index, 1)}
+                      aria-label={`Bajar ${subtask.title}`}
+                      className={cn(
+                        'flex h-3.5 w-4 items-center justify-center rounded text-ink-muted',
+                        'transition-colors hover:text-ink disabled:opacity-25 disabled:hover:text-ink-muted',
+                      )}
+                    >
+                      <ChevronDown className="size-3.5" />
+                    </button>
+                  </div>
+                  <Checkbox
+                    checked={subtask.isDone}
+                    onCheckedChange={() => void actions.toggleSubtask(task.id, subtask.id)}
+                    className="size-4"
+                    aria-label={subtask.title}
+                  />
+                  <input
+                    defaultValue={subtask.title}
+                    onBlur={(event) => {
+                      const value = event.target.value.trim();
+                      if (value.length > 0 && value !== subtask.title) {
+                        void actions.renameSubtask(task.id, subtask.id, value);
+                      } else if (value.length === 0) {
+                        event.target.value = subtask.title;
+                      }
+                    }}
+                    className={cn(
+                      'flex-1 bg-transparent text-sm text-ink outline-none',
+                      subtask.isDone && 'text-ink-muted line-through',
+                    )}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="opacity-0 group-hover:opacity-100"
+                    onClick={() => void actions.removeSubtask(task.id, subtask.id)}
+                    aria-label={`Borrar ${subtask.title}`}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </li>
+              ))}
             </ul>
 
             <div className="flex items-center gap-2">
