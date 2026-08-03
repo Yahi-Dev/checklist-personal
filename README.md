@@ -236,6 +236,28 @@ equivocas**, que es mucho más raro.
 
 ---
 
+## Diseño
+
+Dirección de arte **"Soft Focus"**: lienzo con un tinte lavanda casi imperceptible,
+acento periwinkle (hue 282 en oklch), semánticos pastel y una aurora ambiental de
+tres gradientes radiales tras el contenido, en claro y en oscuro. La noche es
+índigo, no negro.
+
+Todo el sistema vive como tokens de `@theme` en
+[`global.css`](src/app/styles/global.css) — colores, radios, sombras teñidas con el
+tono de marca y **animaciones como tokens** (`--animate-pop`, `--animate-rise-in`,
+`ease-spring` con rebote 1.56). Micro-interacciones: entrada escalonada de la lista,
+píldora deslizante en la navegación móvil, pop del checkbox al completar, halo del
+acento en la captura rápida y anillo Pomodoro con degradado que respira. Todas se
+apagan solas con `prefers-reduced-motion`.
+
+El diseño se validó **iterando con capturas de la app corriendo** (Edge headless):
+la primera pasada sacó a la luz el modo oscuro demasiado negro, una estrella
+duplicada en tareas destacadas y la pista del anillo invisible en oscuro — las tres
+corregidas y re-verificadas en la segunda pasada.
+
+---
+
 ## Comandos
 
 | Comando                                                | Qué hace                                                |
@@ -254,7 +276,7 @@ equivocas**, que es mucho más raro.
 
 ## Pruebas
 
-139 pruebas, centradas donde vive la lógica:
+141 pruebas, centradas donde vive la lógica:
 
 - **Dominio** — recurrencias (31 de enero + 1 mes, años bisiestos, fase de "cada 2
   semanas"), reglas de completado y repetición, especificaciones de la vista Hoy,
@@ -264,8 +286,11 @@ equivocas**, que es mucho más raro.
 - **Infraestructura** — los repositorios contra **IndexedDB de verdad** (vía
   `fake-indexeddb`), porque un índice compuesto mal declarado solo se manifiesta ahí.
 
-No hay pruebas de renderizado de componentes: comprobarían el marcado, se romperían con
-cada cambio de estilo y no detectarían ni un fallo real.
+- **Humo de la app completa** — monta `<App />` de verdad y crea una tarea de
+  extremo a extremo: analizador → caso de uso → IndexedDB → repintado de la lista.
+
+No hay pruebas de renderizado de componentes mas alla del humo: comprobarían el
+marcado, se romperían con cada cambio de estilo y no detectarían ni un fallo real.
 
 ```bash
 pnpm test
