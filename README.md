@@ -118,6 +118,27 @@ cp .env.example .env
    O pega a mano, en orden, los archivos de [`supabase/migrations/`](supabase/migrations/)
    en el editor SQL del panel.
 
+4. **Configura las URLs de retorno.** Este paso no se puede saltar y no tiene aviso: si
+   falta, los correos de confirmación y los enlaces mágicos llevan a `localhost:3000`,
+   que es el valor de fábrica de un proyecto nuevo. En **Authentication → URL
+   Configuration**:
+
+   | Ajuste            | Valor                                                                |
+   | ----------------- | -------------------------------------------------------------------- |
+   | **Site URL**      | `https://<usuario>.github.io/<repo>/`                                |
+   | **Redirect URLs** | `https://<usuario>.github.io/<repo>/**` y `http://localhost:5173/**` |
+
+   El `**` importa: sin él no encajan las vueltas con parámetros (`?code=...`), y
+   Supabase descarta el destino **en silencio** y vuelve a usar el Site URL. El dominio
+   pelado sin la ruta del repositorio tampoco sirve.
+
+> **Para uso personal, plantéate desactivar la confirmación por correo.** En
+> **Authentication → Sign In / Providers → Email**, quitar _Confirm email_ hace que el
+> registro sea instantáneo y elimina de raíz toda esta clase de problemas: los enlaces
+> son de un solo uso y los escáneres de correo de algunos proveedores los abren —y los
+> gastan— antes que tú. Crea tu cuenta y acto seguido desactiva _Allow new users to sign
+> up_: queda una app de un solo usuario, sin puerta abierta.
+>
 > Sin `.env` la app **también arranca**: funciona en modo local contra IndexedDB, sin
 > cuenta y sin sincronización. Es útil para probarla antes de configurar nada.
 
