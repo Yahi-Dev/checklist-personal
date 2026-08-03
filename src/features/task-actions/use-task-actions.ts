@@ -68,6 +68,7 @@ export interface TaskActions {
   snoozeUntil: (taskId: TaskId, isoDate: string) => Promise<void>;
   remove: (task: Task) => Promise<void>;
   archive: (taskId: TaskId) => Promise<void>;
+  restore: (taskId: TaskId) => Promise<void>;
   toggleImportant: (taskId: TaskId) => Promise<void>;
   reorder: (taskId: TaskId, previousId: TaskId | null, nextId: TaskId | null) => Promise<void>;
 
@@ -264,7 +265,23 @@ export const useTaskActions = (): TaskActions => {
     async (taskId: TaskId) => {
       const result = await useCases.archive.execute({ taskId });
       if (isErr(result)) showError(result.error);
-      else toast('Tarea archivada');
+      else toast('Tarea archivada', { description: 'La encuentras en Buscar, al final.' });
+    },
+    [useCases],
+  );
+
+  /**
+   * Saca la tarea del archivo y la devuelve a pendiente.
+   *
+   * El caso de uso ya existia, pero solo se usaba para deshacer un borrado: no habia
+   * ninguna forma de desarchivar desde la interfaz. Archivar era, en la practica, un
+   * borrado sin papelera.
+   */
+  const restore = useCallback(
+    async (taskId: TaskId) => {
+      const result = await useCases.restore.execute({ taskId });
+      if (isErr(result)) showError(result.error);
+      else toast('Tarea recuperada');
     },
     [useCases],
   );
@@ -378,6 +395,7 @@ export const useTaskActions = (): TaskActions => {
     snoozeUntil,
     remove,
     archive,
+    restore,
     toggleImportant,
     reorder,
     addSubtask,

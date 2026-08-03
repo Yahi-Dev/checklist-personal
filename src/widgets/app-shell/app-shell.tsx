@@ -81,7 +81,17 @@ export const AppShell = () => {
   return (
     <div className="flex min-h-dvh">
       {/* ---------------- Barra lateral (escritorio) ---------------- */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-line/70 bg-panel/70 backdrop-blur-xl lg:flex">
+      {/* `sticky top-0 h-dvh`: la barra se queda quieta mientras el contenido pasa por
+          debajo. Sin esto se desplaza con la pagina, y con una lista larga los destinos
+          se van por arriba de la pantalla: la navegacion desaparece justo cuando mas se
+          necesita, que es cuando hay mucho que mirar. La altura fija es lo que permite
+          ademas que la lista de destinos tenga su propio scroll si algun dia no cabe. */}
+      <aside
+        className={cn(
+          'hidden w-60 shrink-0 flex-col border-r border-line/70 bg-panel/70 backdrop-blur-xl',
+          'sticky top-0 h-dvh lg:flex',
+        )}
+      >
         <div className="drag-region flex items-center gap-2.5 px-5 pt-6 pb-4">
           <div className="flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-soft">
             <CheckSquare className="size-4.5" strokeWidth={2.5} />
@@ -89,7 +99,7 @@ export const AppShell = () => {
           <span className="text-sm font-semibold tracking-tight text-ink">Checklist</span>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3" aria-label="Navegacion principal">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3" aria-label="Navegacion principal">
           {NAVIGATION.map((entry) => (
             <NavLink
               key={entry.to}

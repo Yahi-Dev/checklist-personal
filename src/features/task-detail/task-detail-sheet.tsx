@@ -1,4 +1,6 @@
 import {
+  Archive,
+  ArchiveRestore,
   ExternalLink,
   Flag,
   GripVertical,
@@ -166,15 +168,32 @@ const TaskDetailContent = ({ task, onOpenChange }: TaskDetailContentProps) => {
         size="lg"
         footer={
           <>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                void actions.archive(task.id);
-                onOpenChange(false);
-              }}
-            >
-              Archivar
-            </Button>
+            {/* Archivar tiene que poder deshacerse desde el mismo sitio. Antes solo
+                existia el camino de ida: la tarea salia de todas las listas y no habia
+                forma de traerla de vuelta. */}
+            {task.status === 'archived' ? (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  void actions.restore(task.id);
+                  onOpenChange(false);
+                }}
+              >
+                <ArchiveRestore className="size-4" />
+                Desarchivar
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  void actions.archive(task.id);
+                  onOpenChange(false);
+                }}
+              >
+                <Archive className="size-4" />
+                Archivar
+              </Button>
+            )}
             <Button variant="danger" onClick={() => setConfirmDelete(true)}>
               <Trash2 className="size-4" />
               Borrar

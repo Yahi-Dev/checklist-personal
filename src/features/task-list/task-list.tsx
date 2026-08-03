@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronRight } from 'lucide-react';
+import { Archive, CheckCircle2, ChevronRight } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 
 import type { SortMode } from '../../domain/task/task-sorting';
@@ -12,11 +12,15 @@ import { useCategoryIndex, useTagIndex } from '../../shared/hooks/use-live-query
 import { useNow } from '../../shared/hooks/use-now';
 
 /**
- * Lista de tareas con agrupacion opcional y seccion plegable de completadas.
+ * Lista de tareas con agrupacion opcional y secciones plegables al final.
  *
  * Las completadas van al final y plegadas. Aparecen -no se ocultan- porque ver lo que
  * ya hiciste es parte de la sensacion de avance, pero plegadas para que no compitan
  * por atencion con lo que falta.
+ *
+ * Las archivadas siguen el mismo patron, y hubo que añadirlas porque su ausencia era un
+ * agujero: este componente descartaba en silencio todo lo que no fuera pendiente o
+ * completada, asi que archivar equivalia a borrar sin papelera.
  */
 
 export interface TaskListProps {
@@ -25,6 +29,14 @@ export interface TaskListProps {
   /** Agrupa por categoria, con las tareas sin categoria al final. */
   groupByCategory?: boolean;
   showCompleted?: boolean;
+  /**
+   * Enseña tambien las archivadas, plegadas aparte.
+   *
+   * Sin esto, archivar era un viaje sin retorno: la lista descartaba en silencio todo lo
+   * que no fuera pendiente o completada, en TODAS las pantallas, asi que una tarea
+   * archivada dejaba de existir para el usuario aunque siguiera intacta en la base.
+   */
+  showArchived?: boolean;
   hideDueDate?: boolean;
   onOpenTask?: (task: Task) => void;
   onStartFocus?: (task: Task) => void;
@@ -39,6 +51,7 @@ export const TaskList = ({
   sortMode = 'smart',
   groupByCategory = false,
   showCompleted = false,
+  showArchived = false,
   hideDueDate = false,
   onOpenTask,
   onStartFocus,
@@ -50,12 +63,13 @@ export const TaskList = ({
   const categories = useCategoryIndex();
   const tagIndex = useTagIndex();
   const [completedOpen, setCompletedOpen] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
 
   /* Un solo reloj para toda la lista, no uno por fila: asi las cincuenta tareas
      comparten el mismo instante de referencia y se repintan a la vez. */
   const now = useNow();
 
-  const { pending, completed } = useMemo(() => {
+  const { pending, completed, archived } = useMemo(() => {
     const alive = tasks.filter((task) => task.deletedAt === null);
     return {
       pending: sortTasks(
@@ -65,6 +79,9 @@ export const TaskList = ({
       completed: alive
         .filter((task) => task.status === 'completed')
         .sort((a, b) => Date.parse(b.completedAt ?? '') - Date.parse(a.completedAt ?? '')),
+      archived: alive
+        .filter((task) => task.status === 'archived')
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
     };
   }, [tasks, sortMode]);
 
@@ -94,7 +111,12 @@ export const TaskList = ({
   const tagsOf = (task: Task) =>
     task.tagIds.map((id) => tagIndex.get(id as string)).filter((tag) => tag !== undefined);
 
-  if (pending.length === 0 && (completed.length === 0 || !showCompleted)) {
+  const nothingToShow =
+    pending.length === 0 &&
+    (completed.length === 0 || !showCompleted) &&
+    (archived.length === 0 || !showArchived);
+
+  if (nothingToShow) {
     return (
       <EmptyState
         icon={<CheckCircle2 />}
@@ -170,6 +192,32 @@ export const TaskList = ({
 
           {completedOpen && (
             <div className="animate-fade-in space-y-2 pt-1">{completed.map(renderTask)}</div>
+          )}
+        </section>
+      )}
+
+      {showArchived && archived.length > 0 && (
+        <section className="pt-4">
+          <button
+            type="button"
+            onClick={() => setArchivedOpen((open) => !open)}
+            className={cn(
+              'flex w-full items-center gap-1.5 rounded-lg px-1 py-2',
+              'text-xs font-semibold tracking-wide text-ink-muted uppercase',
+              'transition-colors hover:text-ink-soft',
+            )}
+            aria-expanded={archivedOpen}
+          >
+            <ChevronRight
+              className={cn('size-3.5 transition-transform', archivedOpen && 'rotate-90')}
+            />
+            <Archive className="size-3.5" />
+            Archivadas
+            <span className="tabular-nums">{archived.length}</span>
+          </button>
+
+          {archivedOpen && (
+            <div className="animate-fade-in space-y-2 pt-1">{archived.map(renderTask)}</div>
           )}
         </section>
       )}

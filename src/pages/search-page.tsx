@@ -203,6 +203,7 @@ export const SearchPage = () => {
               tasks={results}
               sortMode="smart"
               showCompleted
+              showArchived
               onOpenTask={(task) => {
                 setSelected(task);
                 setDetailOpen(true);
