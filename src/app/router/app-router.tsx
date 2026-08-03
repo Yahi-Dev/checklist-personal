@@ -1,5 +1,5 @@
-import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { createHashRouter, Navigate, RouterProvider, useRouteError } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
 
 import { AppShell } from '../../widgets/app-shell/app-shell';
 import { Button } from '../../shared/ui/button';
@@ -69,10 +69,101 @@ const NotFoundPage = () => (
   </PageContent>
 );
 
+/**
+ * Reconoce el fallo de "el trozo de JavaScript que pedia ya no existe".
+ *
+ * Cada navegador lo redacta a su manera y ninguno expone un codigo, asi que hay que ir
+ * por el texto. Es fragil por naturaleza, pero el precio de no acertar es solo enseñar
+ * el error en vez de recargar; nunca hace nada peor.
+ */
+const isStaleChunkError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return /importing a module script failed|dynamically imported module|chunkloaderror|failed to fetch/i.test(
+    message,
+  );
+};
+
+/** Marca en la pestaña que ya se intento recargar, para no entrar en bucle. */
+const RELOAD_ATTEMPT_KEY = 'checklist.recarga-por-version-vieja';
+
+/**
+ * Que hacer cuando una pantalla no se puede ni cargar.
+ *
+ * El caso real que motiva esto: la app instalada en el movil quedo con codigo viejo tras
+ * un despliegue, pidio un archivo que ya no existia y react-router enseño su pantalla de
+ * error de fabrica -en ingles, hablandole al desarrollador y sin salida-. Para el usuario
+ * eso es una app rota sin nada que pulsar.
+ *
+ * Ante ese fallo concreto se recarga UNA vez y sola: al recargar entra el index.html
+ * nuevo con los archivos nuevos, que es exactamente la cura. La marca en `sessionStorage`
+ * evita el bucle infinito si la recarga no arregla nada, y ahi si se enseña algo con lo
+ * que el usuario pueda seguir.
+ */
+const RouteErrorBoundary = () => {
+  const error = useRouteError();
+  const stale = isStaleChunkError(error);
+
+  const alreadyTried =
+    typeof sessionStorage === 'undefined'
+      ? true
+      : sessionStorage.getItem(RELOAD_ATTEMPT_KEY) !== null;
+
+  useEffect(() => {
+    if (!stale || alreadyTried) return;
+
+    sessionStorage.setItem(RELOAD_ATTEMPT_KEY, '1');
+    globalThis.location.reload();
+  }, [stale, alreadyTried]);
+
+  if (stale && !alreadyTried) {
+    return (
+      <PageContent>
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <Spinner className="size-6 text-brand-500" />
+          <p className="text-sm text-ink-soft">Actualizando a la version nueva…</p>
+        </div>
+      </PageContent>
+    );
+  }
+
+  return (
+    <PageContent>
+      <EmptyState
+        title={stale ? 'Hay que recargar la app' : 'Algo se rompio en esta pantalla'}
+        description={
+          stale
+            ? 'Tu copia se quedo en una version anterior. Cierra la app del todo y vuelve a abrirla; si sigue igual, quitala de la pantalla de inicio y añadela otra vez.'
+            : 'El resto de la app sigue funcionando. Si se repite, recarga.'
+        }
+        action={
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              onClick={() => {
+                sessionStorage.removeItem(RELOAD_ATTEMPT_KEY);
+                globalThis.location.reload();
+              }}
+            >
+              Recargar
+            </Button>
+            <Button asChild variant="secondary">
+              <a href="#/hoy">Ir a Hoy</a>
+            </Button>
+          </div>
+        }
+      />
+    </PageContent>
+  );
+};
+
 const router = createHashRouter([
   {
     path: '/',
     element: <AppShell />,
+    // Sin esto, cualquier fallo al cargar una pantalla acaba en la pantalla de error de
+    // fabrica de react-router, que le habla al desarrollador y no ofrece salida alguna.
+    errorElement: <RouteErrorBoundary />,
     children: [
       { index: true, element: <Navigate to="/hoy" replace /> },
       { path: 'hoy', element: <TodayPage /> },

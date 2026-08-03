@@ -33,10 +33,37 @@ cleanupOutdatedCaches();
  */
 registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
 
-// Una version nueva toma el control sin esperar a que se cierren las pestañas
-// viejas. El aviso de "hay una version nueva" ya deja la recarga en manos del
-// usuario, asi que aqui no hay nada que negociar.
-void self.skipWaiting();
+/**
+ * LA VERSION NUEVA ESPERA. NO SE ACTIVA SOLA.
+ *
+ * Aqui habia un `self.skipWaiting()` suelto, y era un fallo que rompia la app instalada
+ * en cada despliegue. Merece explicarse porque parece inofensivo:
+ *
+ * La pagina que ya esta abierta corre el JavaScript VIEJO, y sus rutas perezosas piden
+ * trozos con el hash viejo (`upcoming-page-ABC123.js`). Al activarse de golpe, el
+ * service worker nuevo precachea solo los trozos NUEVOS y `cleanupOutdatedCaches`
+ * borra los anteriores. En GitHub Pages cada despliegue reemplaza el sitio entero, asi
+ * que esos archivos tampoco estan ya en el servidor. Resultado: la primera navegacion a
+ * una pantalla que aun no se habia abierto pide un archivo que no existe ni en cache ni
+ * en la red, y la app muere con "Importing a module script failed".
+ *
+ * Peor todavia: con `skipWaiting` al instalar, el worker nunca pasa por el estado
+ * "waiting", asi que `onNeedRefresh` NUNCA se dispara y el aviso de "hay una version
+ * nueva" no llega a aparecer. La actualizacion que el comentario anterior daba por
+ * negociada con el usuario ocurria a sus espaldas.
+ *
+ * Ahora el worker nuevo espera. La pestaña vieja sigue con sus archivos viejos, que
+ * siguen en su cache. Cuando el usuario acepta el aviso, `updateApp(true)` manda
+ * SKIP_WAITING y recarga: la pagina y el service worker cambian de version A LA VEZ.
+ */
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  if ((event.data as { type?: string } | null)?.type === 'SKIP_WAITING') {
+    void self.skipWaiting();
+  }
+});
+
+// Se conserva: al activarse -ya con permiso del usuario- toma el control de las
+// pestañas abiertas sin exigir un segundo cierre.
 clientsClaim();
 
 // ---------------------------------------------------------------------------
