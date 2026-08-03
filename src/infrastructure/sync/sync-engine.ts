@@ -10,7 +10,7 @@ import { err, ok } from '../../domain/shared/result';
 import { Outbox } from '../persistence/outbox';
 import { SYNC_META_KEYS, withHints } from '../persistence/records';
 import { TABLE_FOR_ENTITY } from '../supabase/database.types';
-import { toDomainError } from '../../domain/shared/domain-error';
+import { DomainErrors, toDomainError } from '../../domain/shared/domain-error';
 import {
   categoryToRow,
   focusSessionToRow,
@@ -123,30 +123,52 @@ export class SyncEngine implements SyncService {
 
     this.publish({ status: 'syncing', lastError: null });
 
+    /**
+     * SUBIDA Y BAJADA SON INDEPENDIENTES.
+     *
+     * Antes iban encadenadas con await en el mismo try, y eso convertia cualquier fila
+     * rechazada en una averia total: una sola tarea que RLS no aceptara tumbaba el push,
+     * la excepcion saltaba por encima del pull, y el dispositivo dejaba de RECIBIR
+     * ademas de dejar de enviar. El usuario veia una app que no se enteraba de nada
+     * hecho en el otro aparato, cuando el problema estaba en una fila suya.
+     *
+     * Ahora cada sentido se intenta por su cuenta. Si la subida falla, la bajada sigue
+     * corriendo: al menos se ve lo que hacen los demas dispositivos mientras se arregla
+     * lo de aqui. Y el error se conserva para enseñarlo.
+     */
+    const failures: string[] = [];
+
     try {
       await this.push();
-      await this.pull(userId);
-
-      const now = new Date().toISOString();
-      await this.database.setMeta(SYNC_META_KEYS.lastSyncedAt, now);
-
-      this.publish({
-        status: 'idle',
-        lastSyncedAt: now,
-        pendingOperations: await this.outbox.count(),
-        lastError: null,
-      });
-
-      return ok(this.state);
     } catch (cause) {
-      const error = toDomainError(cause, 'No se pudo sincronizar.');
-      this.publish({
-        status: 'error',
-        lastError: error.message,
-        pendingOperations: await this.outbox.count(),
-      });
-      return err(error);
+      failures.push(toDomainError(cause, 'No se pudo subir.').message);
     }
+
+    try {
+      await this.pull(userId);
+    } catch (cause) {
+      failures.push(toDomainError(cause, 'No se pudo bajar.').message);
+    }
+
+    const pending = await this.outbox.count();
+
+    if (failures.length > 0) {
+      const message = failures.join(' · ');
+      this.publish({ status: 'error', lastError: message, pendingOperations: pending });
+      return err(DomainErrors.infrastructure(message));
+    }
+
+    const now = new Date().toISOString();
+    await this.database.setMeta(SYNC_META_KEYS.lastSyncedAt, now);
+
+    this.publish({
+      status: 'idle',
+      lastSyncedAt: now,
+      pendingOperations: pending,
+      lastError: null,
+    });
+
+    return ok(this.state);
   }
 
   // -------------------------------------------------------------------------

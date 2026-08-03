@@ -1,10 +1,15 @@
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
 
 import type { AuthSession } from '../../application/ports/services';
 import type { CurrentUser } from '../../application/ports/repositories';
+import type { UserId } from '../../domain/shared/branded';
 
+import { AdoptLocalDataUseCase } from '../../application/use-cases/sync/adopt-local-data';
+import { brandId } from '../../domain/shared/branded';
 import { getContainer } from '../../infrastructure/di/container';
 import { isOk } from '../../domain/shared/result';
+import { LOCAL_USER_ID } from '../../infrastructure/auth/local-auth-service';
 import { SeedDefaultCategoriesUseCase } from '../../application/use-cases/category/category-commands';
 
 interface AuthContextValue {
@@ -47,7 +52,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       void new SeedDefaultCategoriesUseCase(container.context).execute();
 
       container.sync.startRealtime();
-      void container.sync.sync();
+
+      /**
+       * ANTES de sincronizar hay que adoptar lo que se creo sin cuenta.
+       *
+       * El orden importa y no es negociable: si se sincroniza primero, esas filas viajan
+       * con el usuario ficticio, RLS las rechaza y -al subirse en un solo lote por
+       * tabla- se cae la tabla entera. Adoptando antes, salen ya con el dueño correcto.
+       *
+       * Encadenado y no en paralelo por lo mismo: `sync()` tiene que ver la cola ya
+       * reescrita.
+       */
+      void new AdoptLocalDataUseCase(container.context)
+        .execute({ previousUserId: brandId<UserId>(LOCAL_USER_ID) })
+        .then((adopted) => {
+          if (isOk(adopted) && adopted.value.tareas > 0) {
+            toast.success(
+              `Se subieron ${String(adopted.value.tareas)} tareas de este dispositivo`,
+              {
+                description: 'Las habias creado antes de entrar con tu cuenta.',
+              },
+            );
+          }
+        })
+        .finally(() => {
+          void container.sync.sync();
+        });
     };
 
     void (async () => {

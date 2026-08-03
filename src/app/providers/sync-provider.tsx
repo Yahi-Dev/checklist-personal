@@ -5,6 +5,7 @@ import type { SyncState } from '../../application/ports/services';
 import { appConfig } from '../../shared/config/app-config';
 import { getContainer } from '../../infrastructure/di/container';
 import { useAuth } from './auth-provider';
+import { usePendingOutboxCount } from '../../shared/hooks/use-live-query';
 
 interface SyncContextValue {
   readonly state: SyncState;
@@ -83,6 +84,32 @@ export const SyncProvider = ({ children }: { children: ReactNode }) => {
       window.clearInterval(interval);
     };
   }, [container, user]);
+
+  /**
+   * Sincronizar poco despues de escribir.
+   *
+   * Faltaba, y era la diferencia entre una app que se siente conectada y una que parece
+   * rota: se creaba una tarea, se abria Supabase, no habia nada, y la explicacion -"en
+   * cinco minutos aparece"- no la sabe nadie desde fuera.
+   *
+   * Con un respiro de dos segundos, no en cada escritura: apuntar cinco tareas seguidas
+   * es UN viaje a la red, no cinco. El contador de la cola es una consulta viva, asi que
+   * cada escritura reinicia la espera sola.
+   *
+   * No entra en bucle: al vaciarse la cola el contador baja a cero y esta rama sale
+   * antes de programar nada. Si la subida falla, el contador no cambia y tampoco se
+   * reprograma; de reintentar ya se encargan el intervalo y los demas disparadores.
+   */
+  const pending = usePendingOutboxCount();
+
+  useEffect(() => {
+    if (user === null || pending === 0) return;
+
+    const timer = window.setTimeout(() => void container.sync.sync(), 2000);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [container, user, pending]);
 
   const value = useMemo<SyncContextValue>(
     () => ({

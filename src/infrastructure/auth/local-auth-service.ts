@@ -16,8 +16,17 @@ import { err, ok } from '../../domain/shared/result';
  * El id es un UUID FIJO a proposito: si se generase uno nuevo en cada arranque, las
  * tareas guardadas ayer pertenecerian a un usuario distinto al de hoy y desaparecerian.
  */
+/**
+ * El dueño de todo lo creado sin cuenta.
+ *
+ * Se exporta porque al iniciar sesion de verdad hay que ir a buscar sus filas y
+ * cambiarles el dueño; si no, se quedan para siempre en el dispositivo, rechazadas por
+ * RLS en cada subida y sin que nadie lo diga.
+ */
+export const LOCAL_USER_ID = '00000000-0000-4000-8000-000000000001';
+
 export class LocalAuthService implements AuthService {
-  private static readonly LOCAL_USER_ID = '00000000-0000-4000-8000-000000000001';
+  private static readonly LOCAL_USER_ID = LOCAL_USER_ID;
 
   private readonly session: AuthSession = {
     user: {
