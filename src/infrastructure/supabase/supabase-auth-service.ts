@@ -146,6 +146,22 @@ export class SupabaseAuthService implements AuthService {
         field: 'password',
       });
     }
+    // Este no es un error del usuario sino de configuracion, y sin traducir aparecia
+    // como "Email signups are disabled": describe el sintoma y no dice donde se arregla,
+    // asi que uno se queda mirando el formulario buscando que escribio mal.
+    if (normalized.includes('email signups are disabled')) {
+      return DomainErrors.conflict(
+        'El registro por correo esta desactivado en Supabase. Activalo en ' +
+          'Authentication → Sign In / Providers → Email.',
+      );
+    }
+    if (normalized.includes('email logins are disabled')) {
+      return DomainErrors.conflict(
+        'El acceso por correo esta desactivado en Supabase. Activalo en ' +
+          'Authentication → Sign In / Providers → Email.',
+      );
+    }
+
     if (normalized.includes('rate limit') || normalized.includes('too many')) {
       return DomainErrors.conflict('Demasiados intentos. Espera un momento y vuelve a probar.');
     }

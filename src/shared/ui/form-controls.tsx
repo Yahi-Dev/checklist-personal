@@ -3,9 +3,10 @@ import * as LabelPrimitive from '@radix-ui/react-label';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import {
   forwardRef,
+  useState,
   type ComponentPropsWithoutRef,
   type InputHTMLAttributes,
   type ReactNode,
@@ -73,6 +74,56 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   ),
 );
 Input.displayName = 'Input';
+
+/**
+ * Campo de contraseña con interruptor para verla.
+ *
+ * Los puntitos existen para que nadie lea la contraseña por encima del hombro, pero en
+ * un movil, escribiendo con el pulgar y sin poder revisar lo escrito, ese mismo secreto
+ * convierte cada error de tecleo en un "correo o contraseña incorrectos" que no dice
+ * cual de los dos fallo. Poder mirar un segundo lo que se acaba de escribir resuelve
+ * mas problemas de los que crea, y la decision la toma el usuario, no el formulario.
+ *
+ * El boton es `type="button"` a proposito: dentro de un formulario, un boton sin tipo
+ * es de envio por defecto, asi que mirar la contraseña enviaria el formulario a medias.
+ */
+export const PasswordInput = forwardRef<HTMLInputElement, InputProps>(
+  ({ className, ...props }, ref) => {
+    const [visible, setVisible] = useState(false);
+
+    return (
+      <div className="relative">
+        <Input
+          ref={ref}
+          type={visible ? 'text' : 'password'}
+          // Hueco a la derecha para que el texto no pase por debajo del boton.
+          className={cn('pr-11', className)}
+          {...props}
+        />
+
+        <button
+          type="button"
+          onClick={() => {
+            setVisible((shown) => !shown);
+          }}
+          // Sin `tabIndex={-1}` el tabulador pasaria por aqui camino del boton de
+          // enviar, que es el recorrido que hace todo el mundo tras teclear la clave.
+          tabIndex={-1}
+          aria-label={visible ? 'Ocultar la contraseña' : 'Ver la contraseña'}
+          aria-pressed={visible}
+          className={cn(
+            'absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-control',
+            'text-ink-muted transition-colors duration-150',
+            'hover:text-ink focus-visible:text-ink focus-visible:outline-none',
+          )}
+        >
+          {visible ? <EyeOff className="size-4.5" /> : <Eye className="size-4.5" />}
+        </button>
+      </div>
+    );
+  },
+);
+PasswordInput.displayName = 'PasswordInput';
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   invalid?: boolean;

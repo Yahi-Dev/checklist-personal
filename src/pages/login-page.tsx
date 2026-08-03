@@ -5,7 +5,7 @@ import { useState, type SyntheticEvent } from 'react';
 import { Button } from '../shared/ui/button';
 import { Card, CardContent } from '../shared/ui/layout';
 import { getAuthCallbackError } from '../infrastructure/supabase/auth-callback';
-import { Field, Input } from '../shared/ui/form-controls';
+import { Field, Input, PasswordInput } from '../shared/ui/form-controls';
 import { getContainer } from '../infrastructure/di/container';
 import { isErr } from '../domain/shared/result';
 
@@ -110,9 +110,8 @@ export const LoginPage = () => {
                   required
                   hint={mode === 'sign-up' ? 'Minimo 6 caracteres.' : undefined}
                 >
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="••••••••"
