@@ -4,6 +4,7 @@ import { useState, type SyntheticEvent } from 'react';
 
 import { Button } from '../shared/ui/button';
 import { Card, CardContent } from '../shared/ui/layout';
+import { getAuthCallbackError } from '../infrastructure/supabase/auth-callback';
 import { Field, Input } from '../shared/ui/form-controls';
 import { getContainer } from '../infrastructure/di/container';
 import { isErr } from '../domain/shared/result';
@@ -20,10 +21,23 @@ type Mode = 'sign-in' | 'sign-up' | 'magic-link';
 export const LoginPage = () => {
   const container = getContainer();
 
-  const [mode, setMode] = useState<Mode>('sign-in');
+  /**
+   * Si se llega aqui rebotado desde un enlace del correo que fallo, el motivo ya lo
+   * recogio `main.tsx` antes de montar React. Se usa para el estado INICIAL en vez de
+   * meterlo con un efecto: asi el primer render ya sale con el error puesto, sin un
+   * fotograma en el que la pantalla parece normal, y sin la cascada de renders que
+   * provoca un `setState` dentro de un efecto.
+   */
+  const callback = getAuthCallbackError();
+
+  const [mode, setMode] = useState<Mode>(
+    // El siguiente paso tras un enlace gastado es pedir otro: se deja esa pestaña
+    // delante en vez de obligar a buscarla.
+    callback?.code === 'otp_expired' ? 'magic-link' : 'sign-in',
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(callback?.message ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = async (event: SyntheticEvent) => {

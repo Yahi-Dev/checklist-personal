@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import './app/styles/global.css';
 
 import { App } from './app/App';
+import { captureAuthCallbackError } from './infrastructure/supabase/auth-callback';
 import { registerServiceWorker } from './service-worker/register';
 
 /**
@@ -14,6 +15,11 @@ import { registerServiceWorker } from './service-worker/register';
  * eventos del sistema y a temporizadores: cualquier `useEffect` que no limpie lo suyo
  * se manifiesta aqui, y no en produccion como una fuga que crece con las horas.
  */
+// Antes de montar nada: si venimos rebotados de un enlace de correo que fallo, el motivo
+// esta en la URL y hay que sacarlo de ahi antes de que el enrutador por hash lo confunda
+// con una ruta y enseñe "Esta pagina no existe" en vez de explicar lo ocurrido.
+captureAuthCallbackError();
+
 const container = document.getElementById('root');
 
 if (container === null) {

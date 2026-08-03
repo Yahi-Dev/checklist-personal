@@ -4,9 +4,30 @@ import type { Result } from '../../domain/shared/result';
 import type { Session } from '@supabase/supabase-js';
 import type { UserId } from '../../domain/shared/branded';
 
+import { appConfig } from '../../shared/config/app-config';
 import { brandId } from '../../domain/shared/branded';
 import { DomainErrors, toDomainError } from '../../domain/shared/domain-error';
 import { err, ok } from '../../domain/shared/result';
+
+/**
+ * A donde vuelve el usuario despues de pulsar un enlace del correo.
+ *
+ * Dos decisiones, las dos aprendidas de un fallo real:
+ *
+ * SE USA LA URL PUBLICA COMPLETA, no `location.origin`. En GitHub Pages la app vive en
+ * `/checklist-personal/`, asi que el origen a secas manda a la raiz del dominio, donde no
+ * hay ninguna app que recoja el token.
+ *
+ * SE VUELVE A LA RAIZ, SIN `#/hoy`. El enrutado es por hash y Supabase tambien usa el
+ * fragmento: cuando el enlace falla devuelve `#error=access_denied&...`. Si la URL de
+ * retorno ya trae su propio hash, los dos usos chocan. Volviendo a la raiz, el fragmento
+ * queda libre para Supabase y la app enruta sola a Hoy en cuanto hay sesion.
+ *
+ * `undefined` en Electron (`file://`): ahi no hay direccion de vuelta posible, y mandar
+ * una invalida es peor que dejar que Supabase use la Site URL del proyecto.
+ */
+const emailRedirectTo = (): string | undefined =>
+  appConfig.publicUrl === '' ? undefined : appConfig.publicUrl;
 
 /**
  * Autenticacion contra Supabase Auth.
@@ -60,6 +81,10 @@ export class SupabaseAuthService implements AuthService {
       const { data, error } = await this.supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
+        // Sin esto, Supabase manda el correo de confirmacion a la "Site URL" del
+        // proyecto, que por defecto es `http://localhost:3000`. Es exactamente el
+        // motivo por el que el enlace de confirmacion no llevaba a ninguna parte.
+        options: { emailRedirectTo: emailRedirectTo() },
       });
 
       if (error !== null) return err(this.translate(error.message));
@@ -73,7 +98,7 @@ export class SupabaseAuthService implements AuthService {
     try {
       const { error } = await this.supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
-        options: { emailRedirectTo: `${globalThis.location?.origin ?? ''}/#/hoy` },
+        options: { emailRedirectTo: emailRedirectTo() },
       });
 
       if (error !== null) return err(this.translate(error.message));

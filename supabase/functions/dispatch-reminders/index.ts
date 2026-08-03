@@ -95,7 +95,10 @@ Deno.serve(async (): Promise<Response> => {
       title: reminder.priority === 'high' ? `Importante: ${reminder.title}` : reminder.title,
       body: buildBody(reminder),
       taskId: reminder.task_id,
-      deepLink: `#/tarea/${reminder.task_id}`,
+      // `#/hoy?tarea=<id>` y no `#/tarea/<id>`: el enrutador no tiene una ruta por
+      // tarea, asi que ese enlace caia en "Esta pagina no existe". Justo al pulsar un
+      // recordatorio, que es el peor momento para perder al usuario.
+      deepLink: `#/hoy?tarea=${reminder.task_id}`,
       tag: `task-reminder:${reminder.task_id}`,
     });
 

@@ -71,7 +71,10 @@ export default defineConfig(({ mode }) => {
                 type: 'module',
               },
               manifest: {
-                id: '/',
+                // Relativo, igual que `start_url` y `scope`. Con `'/'` absoluto la
+                // identidad de la app apuntaria a la raiz del dominio, fuera de su
+                // propio ambito en GitHub Pages, donde vive bajo /checklist-personal/.
+                id: '.',
                 name: 'Checklist Personal',
                 short_name: 'Checklist',
                 description:

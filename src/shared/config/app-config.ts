@@ -26,8 +26,36 @@ const env = import.meta.env;
 const supabaseUrl = readString(env.VITE_SUPABASE_URL);
 const supabaseAnonKey = readString(env.VITE_SUPABASE_ANON_KEY);
 
+/**
+ * La URL publica de la aplicacion: el origen MAS la ruta base.
+ *
+ * Existe porque `location.origin` a secas es una respuesta incorrecta en este proyecto,
+ * y de las que fallan en silencio. En GitHub Pages la app no vive en la raiz del dominio
+ * sino en `/checklist-personal/`, asi que un correo de confirmacion construido con solo
+ * el origen manda al usuario a `https://yahi-dev.github.io/`, que no es esta app.
+ *
+ * `BASE_URL` lo inyecta Vite a partir de la opcion `base`, o sea que sale del mismo sitio
+ * que sirve los archivos y no puede desincronizarse de el.
+ *
+ * Devuelve cadena vacia en Electron, donde la app se sirve por `file://`: ahi no hay
+ * ninguna URL a la que un correo pueda volver. Quien la use tiene que tratar ese caso,
+ * no inventarse una.
+ */
+const publicAppUrl = ((): string => {
+  const override = readString(env.VITE_PUBLIC_APP_URL);
+  if (override.length > 0) return `${override.replace(/\/+$/u, '')}/`;
+
+  const origin = globalThis.location?.origin ?? '';
+  if (!origin.startsWith('http')) return '';
+
+  return new URL(readString(env.BASE_URL, '/'), origin).href;
+})();
+
 export const appConfig = {
   version: __APP_VERSION__,
+
+  /** Donde vive esta copia de la app, tal y como la ve el navegador. */
+  publicUrl: publicAppUrl,
 
   supabase: {
     url: supabaseUrl,

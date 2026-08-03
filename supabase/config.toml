@@ -30,11 +30,33 @@ file_size_limit = "10MiB"
 
 [auth]
 enabled = true
+
+# OJO: esto es la configuracion LOCAL. El `site_url` de aqui tiene que seguir apuntando
+# a la maquina de desarrollo: si se pusiera la URL de produccion, un correo emitido con
+# `supabase start` mandaria al desarrollador a la app publicada en vez de a su copia, que
+# es justo lo que ese entorno existe para probar.
+#
+# LOS MISMOS DOS AJUSTES EN LA NUBE SE TOCAN EN EL PANEL, y son los que rompen los
+# enlaces de correo cuando estan mal:
+#   Authentication -> URL Configuration
+#   Site URL:      https://yahi-dev.github.io/checklist-personal/
+#   Redirect URLs: https://yahi-dev.github.io/checklist-personal/**
+#                  http://localhost:5173/**
+# El valor de fabrica de Site URL en un proyecto nuevo es `http://localhost:3000`, que
+# desde un movil no es ningun sitio: el enlace se abre, el token de un solo uso se gasta,
+# y el usuario acaba en una pagina que no carga.
 site_url = "http://localhost:5173"
+
+# Lista blanca de destinos permitidos. Si la app pide volver a una URL que no encaje con
+# ninguno de estos patrones, Supabase la descarta EN SILENCIO y usa `site_url`. El `**`
+# es necesario: sin el no encajan las vueltas con parametros (`?code=...`), y el dominio
+# pelado `https://yahi-dev.github.io` nunca podia encajar porque la app vive bajo
+# `/checklist-personal/`.
 additional_redirect_urls = [
-  "http://localhost:5173",
-  "http://localhost:4173",
-  "https://yahi-dev.github.io",
+  "http://localhost:5173/**",
+  "http://localhost:4173/**",
+  "https://yahi-dev.github.io/checklist-personal/",
+  "https://yahi-dev.github.io/checklist-personal/**",
 ]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true

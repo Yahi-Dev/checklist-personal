@@ -28,7 +28,7 @@ import { SyncIndicator } from '../widgets/sync-indicator/sync-indicator';
 import { TaskDetailSheet } from '../features/task-detail/task-detail-sheet';
 import { TaskList } from '../features/task-list/task-list';
 import { useAllTasks } from '../shared/hooks/use-live-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePreferences } from '../shared/stores/preferences-store';
 
 /**
@@ -41,9 +41,17 @@ import { usePreferences } from '../shared/stores/preferences-store';
 export const TodayPage = () => {
   const tasks = useAllTasks();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [selected, setSelected] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  /**
+   * `#/hoy?tarea=<id>` abre esa tarea directamente. Es a donde apuntan las
+   * notificaciones de recordatorio: pulsar el aviso tiene que llevar A LA TAREA, no a
+   * la lista para que la busques entre veinte.
+   */
+  const requestedTaskId = searchParams.get('tarea');
 
   const sortMode = usePreferences((state) => state.sortMode);
   const setSortMode = usePreferences((state) => state.setSortMode);
@@ -94,10 +102,24 @@ export const TodayPage = () => {
 
   // La hoja lee la version viva de la tarea: si el motor de sincronizacion la actualiza
   // mientras esta abierta, se ve el cambio en vez de un dato congelado.
-  const liveSelected = useMemo(
-    () => (selected === null ? null : (tasks?.find((task) => task.id === selected.id) ?? selected)),
-    [tasks, selected],
-  );
+  //
+  // La tarea pedida por la URL se resuelve aqui tambien, como estado DERIVADO. Abrirla
+  // con un efecto obligaria a un `setState` durante el montaje, y ademas dejaria un
+  // fotograma con la lista sin la hoja encima.
+  const liveSelected = useMemo(() => {
+    if (selected !== null) return tasks?.find((task) => task.id === selected.id) ?? selected;
+    if (requestedTaskId !== null) return tasks?.find((task) => task.id === requestedTaskId) ?? null;
+    return null;
+  }, [tasks, selected, requestedTaskId]);
+
+  const isDetailOpen = detailOpen || (requestedTaskId !== null && liveSelected !== null);
+
+  const closeDetail = (open: boolean) => {
+    setDetailOpen(open);
+    // Al cerrar hay que soltar tambien el parametro: si no, la hoja se reabriria sola en
+    // el siguiente render porque la URL sigue pidiendo esa tarea.
+    if (!open && requestedTaskId !== null) setSearchParams({}, { replace: true });
+  };
 
   const pendingCount = overdue.length + today.length;
 
@@ -210,7 +232,7 @@ export const TodayPage = () => {
         )}
       </PageContent>
 
-      <TaskDetailSheet task={liveSelected} open={detailOpen} onOpenChange={setDetailOpen} />
+      <TaskDetailSheet task={liveSelected} open={isDetailOpen} onOpenChange={closeDetail} />
     </>
   );
 };
