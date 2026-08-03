@@ -90,6 +90,33 @@ jobs:
           # SmartScreen la primera vez, y hay que pulsar "Mas informacion -> Ejecutar".
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+          # ESTAS TRES SON IMPRESCINDIBLES, aunque el .exe compile sin ellas.
+          #
+          # Vite las EMBEBE en tiempo de compilacion: un ejecutable construido sin ellas
+          # no es "el mismo programa sin configurar", es un programa distinto que arranca
+          # en modo local, firma las tareas con un usuario ficticio y nunca sincroniza.
+          # Ese fallo ya ocurrio: un .exe compilado antes de existir el `.env` dejo
+          # diecinueve tareas atrapadas en un dispositivo, sin ningun aviso.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # A donde vuelven los enlaces de correo: en `file://` no hay forma de deducirlo.
+          VITE_PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
+
+      - name: Comprobar que el ejecutable salio configurado
+        shell: bash
+        # Red de seguridad barata contra la clase de fallo de arriba: si los secretos
+        # faltaran, el .exe compilaria igual y el problema no se veria hasta que alguien
+        # perdiera datos. Aqui se cae el build en su lugar.
+        run: |
+          if grep -qa "supabase.co" release/*.exe; then
+            echo "OK: el ejecutable lleva las credenciales embebidas."
+          else
+            echo "FALLO: el .exe se compilo SIN credenciales de Supabase."
+            echo "Arrancaria en modo local y no sincronizaria nunca."
+            echo "Revisa los secretos VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY."
+            exit 1
+          fi
+
       - name: Publicar los ejecutables
         uses: actions/upload-artifact@v4
         with:

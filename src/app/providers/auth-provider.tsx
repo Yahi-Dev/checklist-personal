@@ -5,7 +5,12 @@ import type { AuthSession } from '../../application/ports/services';
 import type { CurrentUser } from '../../application/ports/repositories';
 import type { UserId } from '../../domain/shared/branded';
 
-import { AdoptLocalDataUseCase } from '../../application/use-cases/sync/adopt-local-data';
+import type { AppContainer } from '../../infrastructure/di/container';
+
+import {
+  AdoptLocalDataUseCase,
+  FindForeignDataUseCase,
+} from '../../application/use-cases/sync/adopt-local-data';
 import { brandId } from '../../domain/shared/branded';
 import { getContainer } from '../../infrastructure/di/container';
 import { isOk } from '../../domain/shared/result';
@@ -20,6 +25,46 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/**
+ * Ofrece traerse las tareas que quedaron a nombre de otra sesion.
+ *
+ * SE PREGUNTA, NO SE HACE SOLO. Los datos del modo local no son de nadie y se adoptan
+ * sin consultar, pero estos si tienen un dueño de verdad: en un equipo compartido,
+ * volcarlos a la cuenta que entre ahora seria una fuga entre personas. La diferencia
+ * entre ambos casos es la razon de que existan dos caminos.
+ *
+ * Sin este aviso, el sintoma es mudo y desconcertante: la app enseña las tareas, el
+ * servidor las rechaza una a una con "violates row-level security policy", y el motivo
+ * solo vive en la cola de salida, donde no lo ve nadie.
+ */
+const offerToClaimForeignData = async (container: AppContainer): Promise<void> => {
+  const found = await new FindForeignDataUseCase(container.context).execute();
+  if (!isOk(found)) return;
+
+  for (const owner of found.value) {
+    if (owner.tareas === 0) continue;
+
+    toast('Hay tareas de otra sesion en este dispositivo', {
+      duration: Number.POSITIVE_INFINITY,
+      description: `${String(owner.tareas)} tareas se crearon con otra cuenta, y por eso no se estaban subiendo.`,
+      action: {
+        label: 'Traermelas',
+        onClick: () => {
+          void new AdoptLocalDataUseCase(container.context)
+            .execute({ previousUserId: owner.userId })
+            .then((adopted) => {
+              if (!isOk(adopted)) return;
+              toast.success(`${String(adopted.value.tareas)} tareas ahora son tuyas`, {
+                description: 'Se estan subiendo a la nube.',
+              });
+              void container.sync.sync();
+            });
+        },
+      },
+    });
+  }
+};
 
 /**
  * Fuente unica de verdad de la sesion.
@@ -77,6 +122,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         })
         .finally(() => {
           void container.sync.sync();
+          void offerToClaimForeignData(container);
         });
     };
 

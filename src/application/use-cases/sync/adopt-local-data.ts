@@ -28,8 +28,49 @@ import { err, isErr, ok } from '../../../domain/shared/result';
  */
 
 export interface AdoptLocalDataCommand {
-  /** El id ficticio del modo local. Nunca un usuario real. */
+  /**
+   * De quien se adoptan las filas. El id ficticio del modo local, o el de una sesion
+   * anterior que dejo datos en este dispositivo.
+   */
   readonly previousUserId: UserId;
+}
+
+export interface ForeignOwner {
+  readonly userId: UserId;
+  readonly tareas: number;
+}
+
+/**
+ * Busca datos de OTRO dueño en este dispositivo.
+ *
+ * Existe porque el caso real no fue el que se esperaba. Al cambiar de cuenta -o al
+ * entrar con una distinta de la que creo las tareas- las filas viejas se quedan con el
+ * dueño anterior, y el servidor las rechaza una por una con "new row violates row-level
+ * security policy". La app seguia enseñandolas como si nada: diecinueve tareas en
+ * pantalla, cero en la nube, y el motivo enterrado en la cola de salida.
+ *
+ * Detectarlo NO implica adoptarlo. Un dispositivo compartido puede tener datos de otra
+ * persona, y volcarlos a la cuenta que entre ahora seria una fuga. Esto solo cuenta lo
+ * que hay para que la interfaz pueda preguntar.
+ */
+export class FindForeignDataUseCase implements UseCase<void, ForeignOwner[]> {
+  constructor(private readonly context: UseCaseContext) {}
+
+  async execute(): Promise<Result<ForeignOwner[]>> {
+    const owner = this.context.currentUser();
+    if (owner === null) return ok([]);
+
+    const tasks = await this.context.tasks.findAll({ includeDeleted: true });
+    if (isErr(tasks)) return tasks;
+
+    const counts = new Map<UserId, number>();
+    for (const task of tasks.value) {
+      if (task.userId === owner.id) continue;
+      counts.set(task.userId, (counts.get(task.userId) ?? 0) + 1);
+    }
+
+    return ok([...counts].map(([userId, tareas]) => ({ userId, tareas })));
+  }
 }
 
 export interface AdoptedDataSummary {
