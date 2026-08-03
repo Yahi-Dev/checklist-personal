@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.electron.tsbuildinfo",
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "paths": {
+      "@electron/*": ["./electron/*"]
+    }
+  },
+  /* `src/shared/desktop-bridge.ts` entra aqui a proposito: es el contrato compartido
+     entre el proceso principal y la interfaz, y tiene que compilarse en los dos
+     proyectos para que una firma cambiada en un lado rompa el otro. */
+  "include": ["electron", "src/shared/desktop-bridge.ts"]
+}

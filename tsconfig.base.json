@@ -1,0 +1,41 @@
+{
+  /* ---------------------------------------------------------------------------
+     NOTA SOBRE LA VERSION DE TYPESCRIPT
+     TypeScript esta fijado en 6.x aunque ya exista 7.x.
+     typescript-eslint todavia no soporta la API de TS 7 (el port nativo en Go), y
+     sin el se pierden las reglas con informacion de tipos: `no-floating-promises`,
+     `no-misused-promises` y, sobre todo, `boundaries/element-types`, que es lo que
+     impide que el dominio acabe importando Supabase.
+     Ese analisis vale mas en este proyecto que la mejora de velocidad de TS 7.
+     Seguimiento: https://github.com/typescript-eslint/typescript-eslint/issues/10940
+     --------------------------------------------------------------------------- */
+  "compilerOptions": {
+    "target": "ES2023",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    /* El nucleo de la seguridad de tipos: sin escapatorias. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    /* Deliberadamente apagado: choca de frente con el patron `prop={valorQuizaUndefined}`
+       de React y obliga a spreads condicionales por toda la capa de UI sin aportar
+       seguridad real. `strict` + `noUncheckedIndexedAccess` ya cubren lo importante. */
+    "exactOptionalPropertyTypes": false,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false
+  }
+}

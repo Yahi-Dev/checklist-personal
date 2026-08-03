@@ -1,0 +1,9 @@
+dist
+dist-electron
+release
+coverage
+node_modules
+pnpm-lock.yaml
+public/icons
+build
+supabase/functions

@@ -1,0 +1,57 @@
+# Configuracion del proyecto de Supabase.
+# Solo afecta al entorno LOCAL (`supabase start`). En la nube manda el panel web.
+
+project_id = "checklist-personal"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+# Servidor de correo de mentira: aqui llegan los enlaces magicos en desarrollo.
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = [
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "https://yahi-dev.github.io",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+# En local no se pide confirmar el correo: agiliza las pruebas.
+# En produccion dejalo ACTIVADO desde el panel.
+enable_confirmations = false
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+
+[functions.dispatch-reminders]
+# Quien llama es pg_cron con la clave de servicio, no un usuario con sesion.
+verify_jwt = false

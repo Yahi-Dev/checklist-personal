@@ -1,0 +1,66 @@
+name: Publicar la PWA en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Permite lanzarlo a mano desde la pestaña Actions.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un solo despliegue a la vez, sin cancelar el que ya esta en curso: interrumpir a
+# medias dejaria Pages sirviendo una version incompleta.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Compilar la PWA
+        run: pnpm run build:web
+        env:
+          # Estos secretos se configuran en:
+          #   Settings -> Secrets and variables -> Actions
+          #
+          # La clave `anon` de Supabase es PUBLICA por diseño: va embebida en el bundle
+          # y lo unico que protege los datos son las politicas RLS. Se guarda como
+          # secreto para no tener el identificador del proyecto en el repositorio, no
+          # porque filtrarla comprometa nada por si sola.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+          # GitHub Pages sirve el proyecto bajo /<repo>/, no en la raiz.
+          VITE_PUBLIC_BASE: /${{ github.event.repository.name }}/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

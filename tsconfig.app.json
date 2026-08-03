@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "lib": ["ES2023", "DOM", "DOM.Iterable", "WebWorker"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "types": ["vite/client", "vite-plugin-pwa/client"],
+    /* Sin `baseUrl`: TypeScript 7 lo elimino. Las rutas de `paths` se resuelven
+       ahora relativas a la ubicacion de este tsconfig, que es justo lo que queremos. */
+    "paths": {
+      "@/*": ["./src/*"],
+      "@domain/*": ["./src/domain/*"],
+      "@application/*": ["./src/application/*"],
+      "@infrastructure/*": ["./src/infrastructure/*"],
+      "@features/*": ["./src/features/*"],
+      "@widgets/*": ["./src/widgets/*"],
+      "@pages/*": ["./src/pages/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@app/*": ["./src/app/*"]
+    }
+  },
+  "include": ["src", "tests", "vitest.setup.ts", "src/vite-env.d.ts"]
+}

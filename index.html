@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!--
+      viewport-fit=cover deja que el contenido llegue hasta los bordes del iPhone;
+      las utilidades pt-safe / pb-safe se encargan de que nada quede bajo el notch
+      ni bajo el indicador de inicio.
+      maximum-scale=1 evita el zoom accidental al tocar dos veces una casilla.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+    />
+
+    <title>Checklist Personal</title>
+    <meta name="description" content="Tus tareas del dia a dia, sincronizadas entre el telefono y la computadora." />
+
+    <!-- Color de la barra de estado en la PWA. Lo actualiza ThemeProvider al cambiar el tema. -->
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- iOS: sin esto la PWA abre en Safari con barra de direcciones en vez de a pantalla completa. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Checklist" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+
+    <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg" />
+    <link rel="mask-icon" href="./icons/favicon.svg" color="#6366f1" />
+
+    <!--
+      Se aplica el tema ANTES de pintar nada.
+      Sin esto se ve un destello blanco al arrancar en modo oscuro, porque React
+      todavia no ha montado cuando el navegador pinta el primer fotograma.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('checklist-personal.preferences');
+          var theme = stored ? JSON.parse(stored).state.theme : 'system';
+          var isDark =
+            theme === 'dark' ||
+            (theme === 'system' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document
+              .querySelector('meta[name="theme-color"]')
+              .setAttribute('content', '#2b2f3a');
+          }
+        } catch (error) {
+          /* Preferencias corruptas o localStorage bloqueado: se queda en claro. */
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p style="padding: 2rem; font-family: system-ui, sans-serif">
+        Esta aplicacion necesita JavaScript para funcionar.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

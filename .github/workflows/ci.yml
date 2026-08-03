@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Un push nuevo cancela la ejecucion anterior de la misma rama: no tiene sentido
+# terminar de verificar un commit que ya quedo obsoleto.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Tipos, lint y pruebas
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # `--frozen-lockfile` falla si package.json y el lockfile se han desincronizado.
+      # Es lo que evita que una dependencia entre al repositorio sin quedar fijada.
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Comprobar tipos
+        run: pnpm run typecheck
+
+      # Aqui es donde se comprueba la arquitectura: `eslint-plugin-boundaries` rechaza
+      # cualquier import que cruce las capas en la direccion prohibida.
+      - name: Lint (incluye las reglas de arquitectura)
+        run: pnpm run lint
+
+      - name: Pruebas
+        run: pnpm test
+
+      - name: Formato
+        run: pnpm run format:check
+
+  build:
+    name: Build de la PWA
+    runs-on: ubuntu-latest
+    needs: verify
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # El build web no necesita credenciales reales: sin ellas la app arranca en modo
+      # local. Solo se comprueba que compila.
+      - name: Compilar
+        run: pnpm run build:web
+
+  desktop:
+    name: Build de Windows
+    runs-on: windows-latest
+    needs: verify
+    # Solo en `main`: empaquetar Electron tarda varios minutos y descarga ~200 MB.
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generar el .exe
+        run: pnpm run build:win
+        env:
+          # Sin firma de codigo: es una app personal. Windows mostrara el aviso de
+          # SmartScreen la primera vez, y hay que pulsar "Mas informacion -> Ejecutar".
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Publicar los ejecutables
+        uses: actions/upload-artifact@v4
+        with:
+          name: checklist-personal-windows
+          path: release/*.exe
+          retention-days: 30

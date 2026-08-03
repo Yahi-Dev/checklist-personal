@@ -1,0 +1,190 @@
+import { cva, type VariantProps } from 'class-variance-authority';
+import type { HTMLAttributes, ReactNode } from 'react';
+
+import { cn } from '../lib/cn';
+
+/**
+ * Elementos de retroalimentacion: distintivos, progreso, esqueletos y estados vacios.
+ */
+
+// ---------------------------------------------------------------------------
+// Distintivo
+// ---------------------------------------------------------------------------
+
+const badgeVariants = cva(
+  'inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap',
+  {
+    variants: {
+      variant: {
+        neutral: 'bg-sunken text-ink-soft',
+        brand: 'bg-brand-100 text-brand-800 dark:bg-brand-900/50 dark:text-brand-200',
+        success: 'bg-success/15 text-success',
+        warning: 'bg-warning/15 text-warning',
+        danger: 'bg-danger/15 text-danger',
+        outline: 'border border-line text-ink-soft',
+      },
+      size: {
+        sm: 'px-1.5 py-0.5 text-[10px]',
+        md: 'px-2 py-0.5 text-xs',
+      },
+    },
+    defaultVariants: { variant: 'neutral', size: 'md' },
+  },
+);
+
+export interface BadgeProps
+  extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof badgeVariants> {}
+
+export const Badge = ({ className, variant, size, ...props }: BadgeProps) => (
+  <span className={cn(badgeVariants({ variant, size }), className)} {...props} />
+);
+
+// ---------------------------------------------------------------------------
+// Barra de progreso
+// ---------------------------------------------------------------------------
+
+export interface ProgressProps {
+  /** 0..1 */
+  value: number;
+  className?: string;
+  label?: string;
+  tone?: 'brand' | 'success';
+}
+
+export const Progress = ({ value, className, label, tone = 'brand' }: ProgressProps) => {
+  const percentage = Math.round(Math.min(Math.max(value, 0), 1) * 100);
+
+  return (
+    <div
+      className={cn('h-1.5 w-full overflow-hidden rounded-full bg-sunken', className)}
+      role="progressbar"
+      aria-valuenow={percentage}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={label ?? 'Progreso'}
+    >
+      <div
+        className={cn(
+          'h-full rounded-full transition-[width] duration-300 ease-out',
+          tone === 'success' ? 'bg-success' : 'bg-brand-500',
+        )}
+        style={{ width: `${percentage}%` }}
+      />
+    </div>
+  );
+};
+
+/** Progreso circular: se usa en el temporizador de concentracion. */
+export interface RingProgressProps {
+  /** 0..1 */
+  value: number;
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+  children?: ReactNode;
+}
+
+export const RingProgress = ({
+  value,
+  size = 220,
+  strokeWidth = 10,
+  className,
+  children,
+}: RingProgressProps) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.min(Math.max(value, 0), 1);
+
+  return (
+    <div className={cn('relative inline-flex items-center justify-center', className)}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-sunken"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - clamped)}
+          className="text-brand-500 transition-[stroke-dashoffset] duration-500 ease-linear"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Esqueleto de carga
+// ---------------------------------------------------------------------------
+
+export const Skeleton = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn('animate-pulse rounded-lg bg-sunken', className)}
+    aria-hidden="true"
+    {...props}
+  />
+);
+
+export const TaskListSkeleton = ({ count = 4 }: { count?: number }) => (
+  <div className="space-y-2" aria-busy="true" aria-label="Cargando tareas">
+    {Array.from({ length: count }, (_, index) => (
+      <div key={index} className="flex items-start gap-3 rounded-[--radius-card] bg-panel p-3.5">
+        <Skeleton className="size-5 shrink-0 rounded-md" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-4" style={{ width: `${55 + ((index * 13) % 35)}%` }} />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// Estado vacio
+// ---------------------------------------------------------------------------
+
+export interface EmptyStateProps {
+  icon?: ReactNode;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  className?: string;
+}
+
+/**
+ * Un estado vacio siempre dice que hacer a continuacion.
+ * "No hay tareas" a secas deja al usuario mirando una pantalla en blanco sin pistas.
+ */
+export const EmptyState = ({ icon, title, description, action, className }: EmptyStateProps) => (
+  <div
+    className={cn(
+      'flex flex-col items-center justify-center gap-3 px-6 py-14 text-center',
+      className,
+    )}
+  >
+    {icon !== undefined && (
+      <div className="flex size-14 items-center justify-center rounded-2xl bg-sunken text-ink-muted [&_svg]:size-7">
+        {icon}
+      </div>
+    )}
+    <div className="space-y-1">
+      <p className="text-base font-semibold text-balance text-ink">{title}</p>
+      {description !== undefined && (
+        <p className="max-w-xs text-sm text-balance text-ink-soft">{description}</p>
+      )}
+    </div>
+    {action}
+  </div>
+);

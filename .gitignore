@@ -1,0 +1,44 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+dist-electron/
+dist-ssr/
+release/
+*.tsbuildinfo
+
+# Entorno / secretos
+.env
+.env.*
+!.env.example
+.vapid.json
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+
+# Herramientas
+coverage/
+.vitest/
+.eslintcache
+.turbo/
+
+# Editores
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+logs/
