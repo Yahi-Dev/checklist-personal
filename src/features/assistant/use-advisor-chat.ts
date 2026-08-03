@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import type { AdvisorMessage, PlanOutcome } from '../../application/ports/services';
 import type { AdvisorPlan } from '../../domain/assistant/advisor-plan';
@@ -39,6 +40,7 @@ export interface AdvisorChatState {
 
 export const useAdvisorChat = (): AdvisorChatState => {
   const container = getContainer();
+  const navigate = useNavigate();
 
   const [messages, setMessages] = useState<readonly AdvisorMessage[]>([]);
   const [brief, setBrief] = useState<PlanningBrief | null>(null);
@@ -196,9 +198,14 @@ export const useAdvisorChat = (): AdvisorChatState => {
 
         toast.success('Plan aplicado', {
           description: parts.join(' · '),
-          // El orden solo se ve con la lista en modo manual; llevar alli al usuario
-          // evita que aplique el plan y no note ningun cambio en pantalla.
-          action: { label: 'Ver en Hoy', onClick: () => (globalThis.location.hash = '#/hoy') },
+          // Se ofrece el salto en vez de navegar solo: aplicar el plan no siempre es el
+          // final de la conversacion, y sacar al usuario del chat le cortaria el hilo.
+          action: {
+            label: 'Ver en Hoy',
+            onClick: () => {
+              void navigate('/hoy');
+            },
+          },
         });
 
         markPlan(messageId, 'aplicado');
@@ -206,7 +213,7 @@ export const useAdvisorChat = (): AdvisorChatState => {
         setApplying(false);
       }
     },
-    [markPlan, useCases],
+    [markPlan, navigate, useCases],
   );
 
   const dismissPlan = useCallback(

@@ -61,6 +61,8 @@ export class EdgeAdvisorService implements PlanningAdvisorService {
     };
     turn.signal?.addEventListener('abort', onExternalAbort);
 
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
     try {
       const response = await fetch(`${appConfig.supabase.url}/functions/v1/${FUNCTION_NAME}`, {
         method: 'POST',
@@ -78,7 +80,7 @@ export class EdgeAdvisorService implements PlanningAdvisorService {
         return;
       }
 
-      const reader = response.body.getReader();
+      reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
@@ -122,6 +124,12 @@ export class EdgeAdvisorService implements PlanningAdvisorService {
     } finally {
       clearTimeout(timer);
       turn.signal?.removeEventListener('abort', onExternalAbort);
+
+      // Este `finally` tambien corre cuando el consumidor abandona el bucle a medias
+      // (un `break`, o el componente que se desmonta), porque el motor cierra el
+      // generador. Sin cancelar el lector, esa respuesta se quedaria abierta y el
+      // servidor seguiria generando -y cobrando- una respuesta que ya nadie lee.
+      await reader?.cancel().catch(() => undefined);
     }
   }
 

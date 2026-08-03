@@ -309,8 +309,32 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
+
+      /**
+       * Escribir en un controlador ya cerrado lanza, y hay dos formas de llegar ahi:
+       * el usuario cancela (`cancel()` desconecta el flujo mientras seguimos iterando)
+       * o se emite el error final. Ese fallo taparia el error de verdad con un
+       * "Invalid state" inutil, asi que se traga a proposito.
+       */
+      let closed = false;
+
       const send = (event: unknown): void => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          closed = true;
+        }
+      };
+
+      const close = (): void => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          /* Ya estaba cerrado por el otro extremo. */
+        }
       };
 
       let emitted = 0;
@@ -367,7 +391,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
             type: 'error',
             message: 'El modelo no pudo responder a eso. Prueba a plantearlo de otra forma.',
           });
-          controller.close();
           return;
         }
 
@@ -379,9 +402,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
         send({ type: 'done' });
       } catch (cause) {
-        send({ type: 'error', message: describe(cause) });
+        // Cancelar no es un fallo que haya que contar: el usuario pulso parar.
+        if (!abort.signal.aborted) send({ type: 'error', message: describe(cause) });
       } finally {
-        controller.close();
+        // Un solo punto de cierre. Antes la rama de rechazo cerraba y despues el
+        // `finally` volvia a cerrar, porque un `return` dentro del `try` tambien pasa
+        // por el, y el segundo cierre lanza.
+        close();
       }
     },
 
