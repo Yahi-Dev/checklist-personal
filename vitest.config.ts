@@ -12,6 +12,13 @@ const resolvePath = (relative: string) => fileURLToPath(new URL(relative, import
  * archivo, y equivocarse produce errores crípticos.
  */
 export default defineConfig({
+  /* `__APP_VERSION__` lo inyecta `vite.config.ts` al compilar. Vitest no usa esa
+     configuracion, asi que hay que declararlo tambien aqui o cualquier prueba que
+     alcance `app-config.ts` muere con "__APP_VERSION__ is not defined". */
+  define: {
+    __APP_VERSION__: JSON.stringify('0.0.0-test'),
+  },
+
   resolve: {
     alias: {
       '@': resolvePath('./src'),
