@@ -23,6 +23,9 @@ import { useAuth } from '../providers/auth-provider';
  * descarguen los graficos de estadisticas que quiza no abra hoy.
  */
 
+const AssistantPage = lazy(() =>
+  import('../../pages/assistant-page').then((module) => ({ default: module.AssistantPage })),
+);
 const UpcomingPage = lazy(() =>
   import('../../pages/upcoming-page').then((module) => ({ default: module.UpcomingPage })),
 );
@@ -75,6 +78,7 @@ const router = createHashRouter([
       { path: 'hoy', element: <TodayPage /> },
       { path: 'proximas', element: withSuspense(<UpcomingPage />) },
       { path: 'calendario', element: withSuspense(<CalendarPage />) },
+      { path: 'asistente', element: withSuspense(<AssistantPage />) },
       { path: 'buscar', element: withSuspense(<SearchPage />) },
       { path: 'enfoque', element: withSuspense(<FocusPage />) },
       { path: 'estadisticas', element: withSuspense(<StatsPage />) },

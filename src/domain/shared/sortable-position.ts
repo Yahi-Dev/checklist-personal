@@ -48,6 +48,17 @@ export const positionBetween = (before?: number, after?: number): number | null 
 };
 
 /**
+ * `count` posiciones consecutivas por delante de todo lo que ya existe.
+ *
+ * Sirve para subir un bloque entero al principio de la lista tocando solo sus filas,
+ * en vez de reescribir toda la lista para hacerle sitio.
+ */
+export const positionsBeforeAll = (count: number, existing: readonly number[]): number[] => {
+  const first = existing.length === 0 ? firstPosition() : Math.min(...existing);
+  return Array.from({ length: count }, (_, index) => first - (count - index) * STEP);
+};
+
+/**
  * Reasigna posiciones limpias y equidistantes.
  * Se ejecuta solo cuando `positionBetween` devuelve null, cosa que en uso real
  * requiere cientos de reordenamientos sobre el mismo par de vecinos.

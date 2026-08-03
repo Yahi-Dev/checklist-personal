@@ -13,6 +13,21 @@ import { cleanup } from '@testing-library/react';
  * no habria detectado nunca un indice compuesto mal declarado.
  */
 
+/**
+ * Las pruebas corren SIEMPRE en modo local, con independencia del `.env` de la maquina.
+ *
+ * Vite carga el `.env` del proyecto tambien al ejecutar Vitest, asi que en cuanto un
+ * desarrollador configura Supabase de verdad, `appConfig.supabase.isConfigured` pasa a
+ * ser cierto y la app arranca pidiendo sesion. La prueba de humo del arranque se queda
+ * entonces mirando la pantalla de acceso y falla, mientras que en CI -donde no hay
+ * `.env`- sigue en verde. Es el peor tipo de fallo: depende de quien ejecute la suite.
+ *
+ * Se vacian aqui y no en cada prueba porque ninguna prueba debe hablar con la nube:
+ * las de infraestructura usan IndexedDB en memoria y las del asistente, un doble.
+ */
+vi.stubEnv('VITE_SUPABASE_URL', '');
+vi.stubEnv('VITE_SUPABASE_ANON_KEY', '');
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

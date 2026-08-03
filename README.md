@@ -16,6 +16,10 @@ base de datos.
                     │  cola de salida + sincronización delta
              ┌──────▼───────┐
              │   Supabase   │  Postgres + RLS + Realtime + Storage
+             └──────┬───────┘
+                    │  Edge Function (guarda la clave; no toca la base)
+             ┌──────▼───────┐
+             │    Claude    │  Asistente de priorización
              └──────────────┘
 ```
 
@@ -44,6 +48,21 @@ base de datos.
 - Notas y adjuntos (enlaces y archivos hasta 10 MB).
 - Calendario en vista mes o semana; al pulsar un día, la captura rápida queda anclada a esa fecha.
 - Sincronización entre dispositivos, con resolución de conflictos y funcionamiento sin conexión.
+
+**Asistente de priorización (con Claude)**
+
+- Un chat que responde a "¿por dónde empiezo?". Ve tus tareas atrasadas, las de hoy y las
+  de los próximos tres días, con prioridad, estimación, progreso de subtareas y cuántas
+  veces has pospuesto cada una.
+- Tú aportas lo que no cabe en la base de datos: cuánto tiempo real tienes, con qué
+  cabeza estás, qué compromisos no se mueven.
+- Propone un **orden concreto con el motivo de cada paso**, y opcionalmente ajustes de
+  prioridad, destacado o posponer. Nada se aplica solo: hay que pulsar **Aplicar**.
+- Al aplicar, los cambios pasan por los mismos casos de uso que un toque tuyo, así que
+  respetan las reglas del dominio, funcionan sin conexión y se sincronizan por la cola de
+  siempre.
+- La clave de la API vive como secreto de una Edge Function y **nunca entra en el
+  bundle**. Ver [§ 8](#8-asistente-de-priorización-opcional).
 
 **Extras**
 
@@ -158,6 +177,42 @@ La migración `0004` programa un `pg_cron` que llama a esa función cada minuto.
 aplicarla hay que guardar dos secretos en el Vault de Supabase (`project_url` y
 `service_role_key`); las instrucciones están comentadas dentro del propio archivo SQL.
 
+### 8. Asistente de priorización (opcional)
+
+```bash
+# La clave se guarda como secreto de la función. NO va en .env.
+pnpm dlx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+pnpm dlx supabase functions deploy advisor
+```
+
+Sin esto, la pantalla del asistente explica qué falta y el resto de la app funciona igual.
+
+**Por qué esta clave sí necesita servidor y la de Supabase no.** Son secretos de
+naturaleza distinta y conviene no mezclarlos:
+
+| Clave                    | ¿Va en el bundle?             | Qué protege los datos                                                    |
+| ------------------------ | ----------------------------- | ------------------------------------------------------------------------ |
+| `VITE_SUPABASE_ANON_KEY` | Sí, **es pública por diseño** | Las políticas RLS. Identifica el proyecto, no autoriza nada por sí sola. |
+| `ANTHROPIC_API_KEY`      | **Nunca**                     | Nada: quien la tenga gasta de tu cuenta sin límite.                      |
+
+En una PWA servida por GitHub Pages, "ponerla en una variable de Vite" significa
+publicarla en un `.js` que cualquiera descarga. Por eso la llamada al modelo ocurre en
+[`supabase/functions/advisor`](supabase/functions/advisor/index.ts), que verifica la
+sesión del usuario y hace de proxy del flujo. Esa función **no toca la base de datos** y
+ni siquiera necesita la clave de servicio.
+
+Se puede comprobar sobre el bundle compilado:
+
+```bash
+pnpm run build:web
+grep -ril "anthropic\|sk-ant" dist/    # no debe devolver nada
+```
+
+**Modelo y coste.** Usa `claude-opus-5` con esfuerzo `medium` y respuesta en streaming.
+El resumen que se envía es una proyección recortada de las tareas (máximo 40, sin
+adjuntos ni rutas de Storage), no el agregado completo: cada campo que viaja se paga en
+tokens en cada turno de la conversación.
+
 ---
 
 ## Arquitectura
@@ -170,6 +225,7 @@ src/
 ├── domain/          Reglas de negocio. CERO dependencias externas.
 │   ├── task/           Agregado Tarea: entidad, value objects, especificaciones
 │   ├── recurrence/     Repeticiones (patrón Strategy, una por frecuencia)
+│   ├── assistant/      Resumen del día y validación del plan propuesto
 │   ├── category/  tag/  focus/  stats/
 │   └── shared/         Result, DomainError, Clock, IdGenerator, Specification
 │
@@ -183,6 +239,7 @@ src/
 │   ├── persistence/    Dexie (IndexedDB) + cola de salida
 │   ├── supabase/       Cliente, mapeadores, autenticación, Storage
 │   ├── sync/           Motor de sincronización
+│   ├── assistant/      Cliente SSE de la Edge Function del asistente
 │   ├── notifications/  Web y Electron
 │   └── di/             Raíz de composición
 │
@@ -234,6 +291,23 @@ La fila con `deleted_at` es lo único que propaga un borrado al otro dispositivo
 Confirmar cuesta un toque **cada vez**; deshacer cuesta un toque **solo cuando te
 equivocas**, que es mucho más raro.
 
+**El asistente propone; quien escribe es el dispositivo.**
+La alternativa —que la Edge Function aplicara los cambios directamente en Postgres— era
+más corta de escribir y peor en tres frentes. Las invariantes del dominio dejarían de
+valer (nada impediría posponer al pasado); el dispositivo no se enteraría hasta la
+siguiente bajada, así que el estado local mentiría un rato; y desaparecería el deshacer,
+porque el camino de escritura sería otro. Tal como está, el modelo devuelve una propuesta
+inerte y aplicarla pasa por los mismos casos de uso que un toque del usuario. Como efecto
+secundario, la función no necesita la clave de servicio: solo la de Anthropic.
+
+**El plan se valida contra los identificadores que existen, antes de tocar nada.**
+El esquema de la herramienta garantiza la forma del JSON, no que los identificadores
+sean reales: un modelo puede citar una tarea que no existe o repetir una dos veces. Sin
+ese filtro
+([`parseAdvisorPlan`](src/domain/assistant/advisor-plan.ts)), un id inventado reventaría
+a mitad de aplicar y dejaría medio plan escrito. Lo descartado se cuenta y se enseña en
+la tarjeta: un plan que encoge sin explicación es peor que uno que dice qué se cayó.
+
 ---
 
 ## Diseño
@@ -276,13 +350,15 @@ corregidas y re-verificadas en la segunda pasada.
 
 ## Pruebas
 
-141 pruebas, centradas donde vive la lógica:
+167 pruebas, centradas donde vive la lógica:
 
 - **Dominio** — recurrencias (31 de enero + 1 mes, años bisiestos, fase de "cada 2
   semanas"), reglas de completado y repetición, especificaciones de la vista Hoy,
-  rachas, indexación fraccionaria.
+  rachas, indexación fraccionaria, y el resumen y el plan del asistente (incluido un
+  modelo que cita tareas inexistentes o repetidas).
 - **Aplicación** — el analizador de lenguaje natural (38 casos) y los casos de uso
-  contra repositorios en memoria.
+  contra repositorios en memoria. El asistente se ejercita con un doble con guion, sin
+  red y sin clave de API: es lo que compra haberlo definido como puerto.
 - **Infraestructura** — los repositorios contra **IndexedDB de verdad** (vía
   `fake-indexeddb`), porque un índice compuesto mal declarado solo se manifiesta ahí.
 
@@ -306,7 +382,9 @@ scripts/           Compilación de Electron, generación de iconos y llaves VAPI
 src/               Aplicación (ver Arquitectura)
 supabase/
   migrations/      Esquema, RLS, Storage y recordatorios push
-  functions/       Edge Function que envía las notificaciones
+  functions/
+    dispatch-reminders/  Envía las notificaciones push
+    advisor/             Proxy del asistente (guarda la clave de Anthropic)
 tests/             Pruebas de dominio, aplicación e infraestructura
 ```
 

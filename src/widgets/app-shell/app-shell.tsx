@@ -1,4 +1,13 @@
-import { BarChart3, CalendarDays, CheckSquare, Inbox, Search, Settings, Timer } from 'lucide-react';
+import {
+  BarChart3,
+  CalendarDays,
+  CheckSquare,
+  Inbox,
+  Search,
+  Settings,
+  Sparkles,
+  Timer,
+} from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useMemo } from 'react';
 
@@ -30,11 +39,18 @@ interface NavigationEntry {
   primary: boolean;
 }
 
+/**
+ * En la barra inferior del movil solo caben cinco destinos, asi que cada uno que entra
+ * saca a otro. El asistente entra y el calendario pasa a la lateral: la pregunta "¿por
+ * donde empiezo?" se hace varias veces al dia y desde el telefono, mientras que la
+ * vista de mes se consulta de vez en cuando y casi siempre sentado.
+ */
 const NAVIGATION: readonly NavigationEntry[] = [
   { to: '/hoy', label: 'Hoy', icon: CheckSquare, primary: true },
+  { to: '/asistente', label: 'Asistente', icon: Sparkles, primary: true },
   { to: '/proximas', label: 'Proximas', icon: Inbox, primary: true },
-  { to: '/calendario', label: 'Calendario', icon: CalendarDays, primary: true },
   { to: '/buscar', label: 'Buscar', icon: Search, primary: true },
+  { to: '/calendario', label: 'Calendario', icon: CalendarDays, primary: false },
   { to: '/enfoque', label: 'Enfoque', icon: Timer, primary: false },
   { to: '/estadisticas', label: 'Estadisticas', icon: BarChart3, primary: false },
   { to: '/ajustes', label: 'Ajustes', icon: Settings, primary: true },
@@ -121,7 +137,10 @@ export const AppShell = () => {
 
       {/* ---------------- Contenido ---------------- */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="flex-1">
+        {/* Columna flexible para que una pantalla pueda pedir la altura entera con
+            `flex-1` (lo hace el asistente, que necesita anclar su compositor abajo).
+            Las demas no declaran nada y se siguen apilando desde arriba igual. */}
+        <main className="flex min-h-0 flex-1 flex-col">
           {/* `key` fuerza el remontaje al cambiar de ruta: reinicia el scroll y el
               estado interno de cada pantalla, en vez de arrastrarlo entre vistas. */}
           <Outlet key={location.pathname} />

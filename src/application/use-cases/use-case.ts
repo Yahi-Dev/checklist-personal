@@ -6,7 +6,12 @@ import type {
   TagRepository,
   TaskRepository,
 } from '../ports/repositories';
-import type { FileStorageService, NotificationService, PlatformService } from '../ports/services';
+import type {
+  FileStorageService,
+  NotificationService,
+  PlanningAdvisorService,
+  PlatformService,
+} from '../ports/services';
 import type { IdGenerator } from '../../domain/shared/id-generator';
 import type { ReminderScheduler } from '../services/reminder-scheduler';
 import type { Result } from '../../domain/shared/result';
@@ -47,6 +52,7 @@ export interface UseCaseContext {
   readonly reminders: ReminderScheduler;
   readonly files: FileStorageService;
   readonly platform: PlatformService;
+  readonly advisor: PlanningAdvisorService;
   readonly currentUser: () => CurrentUser | null;
 }
 

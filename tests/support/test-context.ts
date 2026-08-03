@@ -9,6 +9,11 @@ import type {
   UserId,
 } from '../../src/domain/shared/branded';
 import type {
+  AdvisorEvent,
+  AdvisorTurn,
+  PlanningAdvisorService,
+} from '../../src/application/ports/services';
+import type {
   CategoryRepository,
   CurrentUser,
   FocusSessionRepository,
@@ -189,8 +194,35 @@ export class InMemoryFocusSessionRepository implements FocusSessionRepository {
   }
 }
 
+/**
+ * Un asistente con guion.
+ *
+ * Es la contrapartida practica de haber definido el asistente como PUERTO: los casos
+ * de uso se ejercitan con la respuesta exacta que haga falta -incluido un plan que
+ * cita tareas inexistentes- sin red, sin clave de API y sin gastar un centimo.
+ */
+export class ScriptedAdvisorService implements PlanningAdvisorService {
+  /** Las conversaciones recibidas, para comprobar QUE se le mando al modelo. */
+  readonly turns: AdvisorTurn[] = [];
+
+  constructor(
+    private script: readonly AdvisorEvent[] = [{ type: 'done' }],
+    readonly isAvailable = true,
+  ) {}
+
+  setScript(script: readonly AdvisorEvent[]): void {
+    this.script = script;
+  }
+
+  async *ask(turn: AdvisorTurn): AsyncIterable<AdvisorEvent> {
+    this.turns.push(turn);
+    for (const event of this.script) yield event;
+  }
+}
+
 export interface TestHarness {
   readonly context: UseCaseContext;
+  readonly advisor: ScriptedAdvisorService;
   readonly tasks: InMemoryTaskRepository;
   readonly categories: InMemoryCategoryRepository;
   readonly tags: InMemoryTagRepository;
@@ -244,6 +276,8 @@ export const createTestHarness = (
     pickFile: vi.fn(async () => ok(null)),
   };
 
+  const advisor = new ScriptedAdvisorService();
+
   const context: UseCaseContext = {
     tasks,
     categories,
@@ -251,6 +285,7 @@ export const createTestHarness = (
     focusSessions,
     clock,
     ids,
+    advisor,
     notifications: notifications as unknown as UseCaseContext['notifications'],
     reminders: new ReminderScheduler(
       notifications as unknown as UseCaseContext['notifications'],
@@ -262,5 +297,5 @@ export const createTestHarness = (
     currentUser: () => user,
   };
 
-  return { context, tasks, categories, tags, focusSessions, clock, notifications };
+  return { context, advisor, tasks, categories, tags, focusSessions, clock, notifications };
 };

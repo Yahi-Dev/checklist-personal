@@ -12,6 +12,7 @@ import {
   DexieTagRepository,
 } from '../persistence/dexie-repositories';
 import { DexieTaskRepository } from '../persistence/dexie-task-repository';
+import { EdgeAdvisorService, UnavailableAdvisorService } from '../assistant/edge-advisor-service';
 import { ElectronNotificationService } from '../notifications/electron-notification-service';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabase/client';
 import { LocalAuthService, NullSyncService } from '../auth/local-auth-service';
@@ -81,6 +82,9 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
   const files =
     supabase === null ? new UnavailableFileStorage() : new SupabaseFileStorage(supabase);
 
+  const advisor =
+    supabase === null ? new UnavailableAdvisorService() : new EdgeAdvisorService(supabase);
+
   const sync: SyncService =
     supabase === null
       ? new NullSyncService()
@@ -97,6 +101,7 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
     reminders,
     files,
     platform,
+    advisor,
     currentUser: () => currentUser,
   };
 

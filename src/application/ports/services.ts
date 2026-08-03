@@ -1,5 +1,8 @@
+import type { AdvisorPlan } from '../../domain/assistant/advisor-plan';
 import type { CurrentUser } from './repositories';
+import type { DomainError } from '../../domain/shared/domain-error';
 import type { IsoDateTime } from '../../domain/task/value-objects/iso-date-time';
+import type { PlanningBrief } from '../../domain/assistant/planning-brief';
 import type { Result } from '../../domain/shared/result';
 import type { TaskId } from '../../domain/shared/branded';
 
@@ -121,6 +124,58 @@ export interface PlatformService {
   saveFile(fileName: string, contents: string, mimeType: string): Promise<Result<void>>;
   /** Pide un archivo al usuario y devuelve su contenido en texto. */
   pickFile(accept: string): Promise<Result<string | null>>;
+}
+
+// --- Asistente de priorizacion --------------------------------------------
+
+export type AdvisorRole = 'user' | 'assistant';
+
+/** Que hizo el usuario con un plan propuesto. Se le cuenta al asistente en el turno siguiente. */
+export type PlanOutcome = 'pendiente' | 'aplicado' | 'descartado';
+
+export interface AdvisorMessage {
+  readonly id: string;
+  readonly role: AdvisorRole;
+  readonly text: string;
+  /** Solo en mensajes del asistente, y solo si propuso un orden. */
+  readonly plan: AdvisorPlan | null;
+  readonly planOutcome: PlanOutcome;
+  readonly at: IsoDateTime;
+}
+
+/**
+ * Trozos de la respuesta segun van llegando.
+ *
+ * El error viaja como un evento del flujo y no como una excepcion: cuando ya se
+ * imprimieron tres parrafos y la conexion se corta, lanzar obligaria a cada consumidor
+ * a envolver el bucle en try/catch y a decidir que hacer con lo ya pintado. Como
+ * evento, el fallo se trata igual que cualquier otro trozo.
+ */
+export type AdvisorEvent =
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'plan'; readonly plan: AdvisorPlan }
+  | { readonly type: 'done' }
+  | { readonly type: 'error'; readonly error: DomainError };
+
+export interface AdvisorTurn {
+  readonly brief: PlanningBrief;
+  /** La conversacion completa, incluido el mensaje nuevo del usuario al final. */
+  readonly messages: readonly AdvisorMessage[];
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * El asistente de priorizacion.
+ *
+ * El puerto no menciona a Claude, ni HTTP, ni SSE: la aplicacion solo sabe que existe
+ * algo que, dado el estado del dia y una conversacion, devuelve texto y a veces un
+ * plan. Eso es lo que permite que los casos de uso se prueben con un doble que
+ * devuelve un guion fijo, sin red y sin clave de API.
+ */
+export interface PlanningAdvisorService {
+  /** `false` cuando no hay servidor configurado: la interfaz lo dice en vez de fallar. */
+  readonly isAvailable: boolean;
+  ask(turn: AdvisorTurn): AsyncIterable<AdvisorEvent>;
 }
 
 // --- Preferencias ----------------------------------------------------------
