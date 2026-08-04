@@ -18,7 +18,7 @@ import { useSync } from '../../app/providers/sync-provider';
  * computadora.
  */
 export const SyncIndicator = ({ compact = false }: { compact?: boolean }) => {
-  const { state, isOnline, syncNow } = useSync();
+  const { state, isOnline, syncNow, retryBlocked } = useSync();
   const { isCloudEnabled } = useAuth();
   const pending = usePendingOutboxCount();
 
@@ -45,13 +45,35 @@ export const SyncIndicator = ({ compact = false }: { compact?: boolean }) => {
     );
   }
 
-  const { icon, label, tone } = describe({ status: state.status, isOnline, pending });
+  const blocked = state.blockedOperations;
+
+  /**
+   * Lo atascado manda sobre todo lo demas.
+   *
+   * Es la unica situacion que NO se arregla sola con el tiempo, y era justo la que no se
+   * veia: el dispositivo podia llevar dias sin subir nada mientras enseñaba "todo
+   * sincronizado", porque segun sus propias cuentas no le quedaba nada pendiente. Aparecer
+   * por delante del resto de estados es el punto.
+   */
+  const { icon, label, tone } = blocked > 0
+    ? {
+        icon: <AlertCircle className="size-3.5" />,
+        label: `${String(blocked)} sin subir`,
+        tone: 'text-warning',
+      }
+    : describe({ status: state.status, isOnline, pending });
 
   return (
     <Tooltip
       content={
         <span className="flex flex-col gap-0.5">
           <span>{label}</span>
+          {blocked > 0 && (
+            <span className="opacity-70">
+              El servidor los rechazo. Pulsa para reintentarlos.
+              {state.blockedReason !== null && ` (${state.blockedReason})`}
+            </span>
+          )}
           {state.lastSyncedAt !== null && (
             <span className="opacity-70">Ultima vez {formatRelativeToNow(state.lastSyncedAt)}</span>
           )}
@@ -62,9 +84,13 @@ export const SyncIndicator = ({ compact = false }: { compact?: boolean }) => {
       <Button
         variant="ghost"
         size={compact ? 'icon-sm' : 'sm'}
-        onClick={syncNow}
+        onClick={blocked > 0 ? retryBlocked : syncNow}
         className={cn('gap-2', tone)}
-        aria-label={`Sincronizacion: ${label}. Pulsa para sincronizar ahora.`}
+        aria-label={
+          blocked > 0
+            ? `${String(blocked)} cambios que el servidor rechazo. Pulsa para reintentarlos.`
+            : `Sincronizacion: ${label}. Pulsa para sincronizar ahora.`
+        }
       >
         {icon}
         {!compact && <span className="truncate text-xs">{label}</span>}

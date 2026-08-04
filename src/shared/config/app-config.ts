@@ -87,6 +87,13 @@ export const appConfig = {
      */
     pullOverlapMs: 1000,
     pageSize: 500,
+    /**
+     * Tope de una pasada entera. Generoso a proposito: con datos moviles malos, subir
+     * varias paginas puede tardar de verdad, y cortar una sincronizacion sana solo la
+     * obligaria a empezar de cero. Lo que evita es que una peticion colgada bloquee para
+     * siempre el resto -que es un fallo mudo y sin arreglo salvo reiniciar-.
+     */
+    timeoutMs: 90_000,
   },
 
   ui: {

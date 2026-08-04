@@ -49,6 +49,29 @@ export class AppDatabase extends Dexie {
 
       meta: 'key',
     });
+
+    /**
+     * v2: `[attempts+seq]` en la cola de salida.
+     *
+     * La cola se lee en orden de encolado saltando lo que agoto sus reintentos, y sin
+     * indice eso obligaba a traer las N primeras entradas ENTERAS -con la foto completa
+     * de cada tarea dentro- para descartarlas en memoria. Dos consecuencias, y la segunda
+     * es la grave:
+     *
+     *   1. El contador de la cola es una consulta viva que se reevalua en CADA escritura,
+     *      asi que ese barrido corria constantemente mientras se escribe.
+     *   2. Con el limite por pagina, un bloque de entradas atascadas a la cabeza se comia
+     *      la pagina entera y dejaba fuera a las buenas que venian detras: bastaban unas
+     *      pocas filas rechazadas para que nada volviera a subir nunca.
+     *
+     * El indice compuesto -y no uno simple sobre `attempts`- es lo que permite pedir
+     * "las no atascadas EN ORDEN de encolado" en una sola pasada del indice.
+     *
+     * Solo se añade un indice: Dexie reindexa las filas existentes sin tocar los datos.
+     */
+    this.version(2).stores({
+      outbox: '++seq, entity, entityId, [entity+entityId], createdAt, attempts, [attempts+seq]',
+    });
   }
 
   /** Vacia todo. Solo lo usa el cierre de sesion y la resincronizacion completa. */

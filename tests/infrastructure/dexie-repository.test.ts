@@ -209,7 +209,7 @@ describe('Outbox', () => {
 
     // Diez fallos seguidos: deja de bloquear la cola.
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      await outbox.recordFailure([entry!.seq!], 'error de red');
+      await outbox.recordFailures(new Map([[entry!.seq!, 'error de red']]));
     }
 
     expect(await outbox.pending()).toHaveLength(0);

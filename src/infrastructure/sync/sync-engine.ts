@@ -1,3 +1,5 @@
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+
 import type { AppDatabase } from '../persistence/database';
 import type { AppSupabaseClient } from '../supabase/client';
 import type { CategoryRow, FocusSessionRow, TagRow, TaskRow } from '../supabase/database.types';
@@ -8,7 +10,7 @@ import type { SyncService, SyncState } from '../../application/ports/services';
 import { appConfig } from '../../shared/config/app-config';
 import { err, ok } from '../../domain/shared/result';
 import { Outbox } from '../persistence/outbox';
-import { SYNC_META_KEYS, withHints } from '../persistence/records';
+import { pullCursorKey, SYNC_META_KEYS, SYNCABLE_ENTITIES, withHints } from '../persistence/records';
 import { TABLE_FOR_ENTITY } from '../supabase/database.types';
 import { DomainErrors, toDomainError } from '../../domain/shared/domain-error';
 import {
@@ -33,6 +35,7 @@ import {
 interface SyncTable {
   get(id: string): PromiseLike<(IndexHints & { updatedAt: string }) | undefined>;
   put(value: unknown): PromiseLike<unknown>;
+  delete(id: string): PromiseLike<void>;
 }
 
 /**
@@ -65,11 +68,15 @@ export class SyncEngine implements SyncService {
     lastSyncedAt: null,
     pendingOperations: 0,
     lastError: null,
+    blockedOperations: 0,
+    blockedReason: null,
   };
 
   private readonly listeners = new Set<(state: SyncState) => void>();
   private readonly outbox: Outbox;
   private realtimeChannel: ReturnType<AppSupabaseClient['channel']> | null = null;
+  /** El socket estuvo caido: al volver hay que bajar lo que paso mientras tanto. */
+  private realtimeWasDropped = false;
   private inFlight: Promise<Result<SyncState>> | null = null;
 
   constructor(
@@ -100,12 +107,48 @@ export class SyncEngine implements SyncService {
   async sync(): Promise<Result<SyncState>> {
     if (this.inFlight !== null) return this.inFlight;
 
-    this.inFlight = this.runSync();
+    const attempt = this.withDeadline(this.runSync());
+    this.inFlight = attempt;
+
     try {
-      return await this.inFlight;
+      return await attempt;
     } finally {
-      this.inFlight = null;
+      if (this.inFlight === attempt) this.inFlight = null;
     }
+  }
+
+  /**
+   * Le pone un tope a la pasada para que la puerta no se quede cerrada por dentro.
+   *
+   * `inFlight` solo se libera cuando la promesa termina, asi que una peticion que no
+   * resuelva NUNCA -y las hay: un movil que pasa de wifi a datos deja sockets colgados sin
+   * error ni cierre- dejaba el campo ocupado para siempre. A partir de ahi cada disparador
+   * -el intervalo, volver a la app, recuperar conexion- recibia esa misma promesa muerta y
+   * no pasaba nada. La app dejaba de sincronizar hasta reiniciarla, sin ningun sintoma
+   * salvo que los datos se quedaban viejos.
+   *
+   * Vencido el plazo se abre la puerta aunque la pasada anterior siga por ahi. Puede haber
+   * solape, y es un precio aceptable: todas las operaciones son idempotentes -upsert por
+   * id, y la cola se confirma por `seq`-, mientras que quedarse mudo no tiene arreglo.
+   */
+  private withDeadline(work: Promise<Result<SyncState>>): Promise<Result<SyncState>> {
+    return new Promise<Result<SyncState>>((resolve) => {
+      const timer = setTimeout(() => {
+        this.publish({ status: 'error', lastError: 'La sincronizacion tardo demasiado.' });
+        resolve(err(DomainErrors.infrastructure('La sincronizacion tardo demasiado.')));
+      }, appConfig.sync.timeoutMs);
+
+      void work.then(
+        (result) => {
+          clearTimeout(timer);
+          resolve(result);
+        },
+        (cause: unknown) => {
+          clearTimeout(timer);
+          resolve(err(toDomainError(cause, 'No se pudo sincronizar.')));
+        },
+      );
+    });
   }
 
   private async runSync(): Promise<Result<SyncState>> {
@@ -117,7 +160,7 @@ export class SyncEngine implements SyncService {
     }
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      this.publish({ status: 'offline', pendingOperations: await this.outbox.count() });
+      this.publish({ status: 'offline', ...(await this.queueSummary()) });
       return ok(this.state);
     }
 
@@ -150,25 +193,42 @@ export class SyncEngine implements SyncService {
       failures.push(toDomainError(cause, 'No se pudo bajar.').message);
     }
 
-    const pending = await this.outbox.count();
+    const queue = await this.queueSummary();
 
     if (failures.length > 0) {
       const message = failures.join(' · ');
-      this.publish({ status: 'error', lastError: message, pendingOperations: pending });
+      this.publish({ status: 'error', lastError: message, ...queue });
       return err(DomainErrors.infrastructure(message));
     }
 
     const now = new Date().toISOString();
     await this.database.setMeta(SYNC_META_KEYS.lastSyncedAt, now);
 
-    this.publish({
-      status: 'idle',
-      lastSyncedAt: now,
-      pendingOperations: pending,
-      lastError: null,
-    });
+    this.publish({ status: 'idle', lastSyncedAt: now, lastError: null, ...queue });
 
     return ok(this.state);
+  }
+
+  /**
+   * Como esta la cola: lo que sigue en camino y lo que se quedo por el camino.
+   *
+   * Se calcula en un solo sitio para que el indicador no pueda contradecirse consigo
+   * mismo segun por donde haya pasado la sincronizacion.
+   */
+  private async queueSummary(): Promise<Pick<SyncState, 'pendingOperations' | 'blockedOperations' | 'blockedReason'>> {
+    const blocked = await this.outbox.poisoned();
+    const [first] = blocked;
+
+    return {
+      pendingOperations: await this.outbox.pendingCount(),
+      blockedOperations: blocked.length,
+      blockedReason: first?.lastError ?? null,
+    };
+  }
+
+  async retryBlocked(): Promise<Result<SyncState>> {
+    await this.outbox.retryPoisoned();
+    return this.sync();
   }
 
   // -------------------------------------------------------------------------
@@ -178,48 +238,120 @@ export class SyncEngine implements SyncService {
   /**
    * Envia la cola al servidor agrupada por tabla.
    *
-   * Se reproduce en ORDEN de encolado, y las categorias y etiquetas van antes que las
-   * tareas: una tarea puede referenciar una categoria creada sin conexion en el mismo
-   * lote, y si llegara primero la tarea, la clave foranea la rechazaria.
+   * Las categorias y etiquetas van antes que las tareas: una tarea puede referenciar una
+   * categoria creada sin conexion en el mismo lote, y si llegara primero la tarea, la
+   * clave foranea la rechazaria.
+   *
+   * CADA TABLA VA EN SU PROPIO INTENTO, Y ESTO ES LO IMPORTANTE.
+   *
+   * Antes el bucle no atrapaba nada, asi que la primera tabla que fallara abortaba las
+   * siguientes. Como las categorias van las primeras, UNA sola categoria que el servidor
+   * rechazara -por ejemplo una heredada de otra sesion, que RLS rechaza siempre- impedia
+   * que se intentaran siquiera las tareas. Para siempre, en silencio, y sin que el
+   * dispositivo diera ninguna señal: sus tareas se veian bien en local y no existian en
+   * ningun otro sitio.
+   *
+   * Ese fallo en cadena es exactamente lo que hacia que un dispositivo se quedara con una
+   * version distinta de la realidad que los demas. Ahora una tabla atascada solo se
+   * atasca a si misma.
    */
   private async push(): Promise<void> {
     const entries = await this.outbox.pending(appConfig.sync.pageSize);
     if (entries.length === 0) return;
 
     const order: SyncableEntity[] = ['category', 'tag', 'task', 'focusSession'];
+    const failures: string[] = [];
 
     for (const entity of order) {
       const group = entries.filter((entry) => entry.entity === entity);
       if (group.length === 0) continue;
 
-      await this.pushGroup(entity, group);
+      try {
+        await this.pushGroup(entity, group);
+      } catch (cause) {
+        failures.push(toDomainError(cause, `No se pudo subir ${entity}.`).message);
+      }
     }
+
+    if (failures.length > 0) throw new Error(failures.join(' · '));
   }
 
+  /**
+   * Sube un grupo y confirma SOLO lo que el servidor acepto.
+   *
+   * Lo rechazado se queda en la cola con su motivo propio; lo aceptado se confirma y se
+   * marca limpio aunque en el mismo lote hubiera filas malas.
+   */
   private async pushGroup(entity: SyncableEntity, group: readonly OutboxEntry[]): Promise<void> {
-    const table = TABLE_FOR_ENTITY[entity];
-    const rows = group.map((entry) => this.toRow(entity, entry.payload));
-    const sequences = group
-      .map((entry) => entry.seq)
-      .filter((seq): seq is number => seq !== undefined);
+    const rejected = new Map<number, string>();
+    await this.upsertIsolating(entity, group, rejected);
 
-    const { error } = await this.supabase.from(table).upsert(rows as never, {
+    const accepted = group.filter((entry) => entry.seq === undefined || !rejected.has(entry.seq));
+
+    await this.outbox.acknowledge(
+      accepted.map((entry) => entry.seq).filter((seq): seq is number => seq !== undefined),
+    );
+    await this.markClean(entity, accepted);
+
+    if (rejected.size === 0) return;
+
+    await this.outbox.recordFailures(rejected);
+
+    const [motivo] = [...rejected.values()];
+    throw new Error(
+      `${String(rejected.size)} de ${String(group.length)} en ${entity}: ${motivo ?? 'rechazadas'}`,
+    );
+  }
+
+  /**
+   * Sube el lote y, si el servidor lo rechaza, encuentra las filas culpables.
+   *
+   * Postgres rechaza la SENTENCIA entera, no la fila mala. Un upsert de 500 tareas en el
+   * que una sola viole RLS o un `check` no sube ninguna de las otras 499, y como el
+   * fallo se apuntaba a las 500 por igual, diez pasadas despues la cola entera quedaba
+   * descartada -culpables e inocentes- con un motivo que casi ninguna habia provocado.
+   *
+   * Se parte el lote en dos y se reintenta cada mitad hasta aislar la fila concreta. Son
+   * unas nueve peticiones para una fila mala entre 500, en vez de las 500 que costaria ir
+   * de una en una. Es seguro porque un upsert por id es idempotente: reenviar una fila ya
+   * aceptada no cambia nada.
+   *
+   * SOLO se parte cuando el error es DE FILA. Si se cae la red o caduca la sesion no hay
+   * ninguna fila culpable, y bisecar entonces multiplicaria las peticiones para acabar
+   * castigando a filas perfectamente validas: unas cuantas tardes con mala señal bastaban
+   * para descartar la cola entera. Ese caso sale por arriba sin tocar los contadores.
+   */
+  private async upsertIsolating(
+    entity: SyncableEntity,
+    group: readonly OutboxEntry[],
+    rejected: Map<number, string>,
+  ): Promise<void> {
+    if (group.length === 0) return;
+
+    const rows = group.map((entry) => this.toRow(entity, entry.payload));
+
+    const { error } = await this.supabase.from(TABLE_FOR_ENTITY[entity]).upsert(rows as never, {
       onConflict: 'id',
       // El servidor no tiene que devolvernos lo que acabamos de mandar: ahorra ancho
       // de banda, que en datos moviles se nota.
       ignoreDuplicates: false,
     });
 
-    if (error !== null) {
-      await this.outbox.recordFailure(sequences, error.message);
+    if (error === null) return;
+
+    if (!isRowRejection(error.code)) {
       throw new Error(`Fallo al subir ${entity}: ${error.message}`);
     }
 
-    await this.outbox.acknowledge(sequences);
-    await this.markClean(
-      entity,
-      group.map((entry) => entry.entityId),
-    );
+    if (group.length === 1) {
+      const [entry] = group;
+      if (entry?.seq !== undefined) rejected.set(entry.seq, error.message);
+      return;
+    }
+
+    const middle = Math.floor(group.length / 2);
+    await this.upsertIsolating(entity, group.slice(0, middle), rejected);
+    await this.upsertIsolating(entity, group.slice(middle), rejected);
   }
 
   private toRow(entity: SyncableEntity, payload: unknown): unknown {
@@ -245,12 +377,28 @@ export class SyncEngine implements SyncService {
    * alguna fila ya sincronizada. Ese reenvio es idempotente -es un upsert por id- asi
    * que el coste de la inconsistencia es cero y no hace falta pagar el bloqueo.
    */
-  private async markClean(entity: SyncableEntity, ids: readonly string[]): Promise<void> {
+  private async markClean(entity: SyncableEntity, entries: readonly OutboxEntry[]): Promise<void> {
     const table = this.tableFor(entity);
 
-    for (const id of ids) {
-      const record = await table.get(id);
+    for (const entry of entries) {
+      const record = await table.get(entry.entityId);
       if (record === undefined) continue;
+
+      /**
+       * SOLO SI LA FILA SIGUE SIENDO LA QUE VIAJO.
+       *
+       * Entre que se envia el lote y llega la respuesta pasan cientos de milisegundos -en
+       * datos moviles, segundos-, y en ese hueco el usuario puede editar la misma tarea.
+       * Marcarla limpia entonces era declarar subido algo que el servidor no ha visto: la
+       * bajada de ese mismo ciclo la trataba como una fila sin cambios locales y le pasaba
+       * por encima la version antigua del servidor. La edicion desaparecia delante del
+       * usuario, segundos despues de hacerla y sin ningun aviso.
+       *
+       * La edicion nueva ya tiene su propia anotacion en la cola, asi que dejarla sucia no
+       * pierde nada: sube en la pasada siguiente.
+       */
+      if (Date.parse(record.updatedAt) > Date.parse(entry.updatedAt)) continue;
+
       await table.put({ ...record, _dirty: 0 });
     }
   }
@@ -273,20 +421,39 @@ export class SyncEngine implements SyncService {
    * caeria fuera de esta bajada y de todas las siguientes.
    */
   private async pull(userId: string): Promise<void> {
-    const lastPulledAt = await this.database.getMeta<string>(SYNC_META_KEYS.lastPulledAt);
-    const since =
-      lastPulledAt === null
-        ? new Date(0).toISOString()
-        : new Date(Date.parse(lastPulledAt) - appConfig.sync.pullOverlapMs).toISOString();
+    // Categorias y etiquetas antes que las tareas, por el mismo motivo que al subir: una
+    // tarea que llega antes que su categoria se pinta un instante sin ella.
+    await this.pullEntity('category', userId, (since) => this.pullCategories(userId, since));
+    await this.pullEntity('tag', userId, (since) => this.pullTags(userId, since));
+    await this.pullEntity('task', userId, (since) => this.pullTasks(userId, since));
+    await this.pullEntity('focusSession', userId, (since) =>
+      this.pullFocusSessions(userId, since),
+    );
+  }
 
-    let watermark = lastPulledAt ?? new Date(0).toISOString();
+  /**
+   * Baja una tabla y avanza SU marca de agua, solo si termino entera.
+   *
+   * Guardar la marca dentro de este metodo -y no una comun al final- es lo que hace que
+   * un fallo a mitad no mienta: si las tareas revientan despues de que las categorias
+   * fueran bien, las categorias conservan su avance y las tareas reintentan desde donde
+   * estaban. Con una marca unica habia que elegir entre perder el avance de una o dar por
+   * bajada una tabla que no lo estaba.
+   */
+  private async pullEntity(
+    entity: SyncableEntity,
+    userId: string,
+    fetch: (since: string) => Promise<string>,
+  ): Promise<void> {
+    const key = pullCursorKey(entity, userId);
+    const cursor = (await this.database.getMeta<string>(key)) ?? EPOCH;
 
-    watermark = maxIso(watermark, await this.pullCategories(userId, since));
-    watermark = maxIso(watermark, await this.pullTags(userId, since));
-    watermark = maxIso(watermark, await this.pullTasks(userId, since));
-    watermark = maxIso(watermark, await this.pullFocusSessions(userId, since));
+    const watermark = await fetch(sinceFor(cursor));
 
-    await this.database.setMeta(SYNC_META_KEYS.lastPulledAt, watermark);
+    // Nunca hacia atras: `fetch` devuelve el `since` recibido cuando no hubo filas, y ese
+    // valor lleva el solape restado. Guardarlo tal cual retrocederia la marca un segundo
+    // en cada pasada, y a base de pasadas se acabaria rebajando el catalogo entero.
+    await this.database.setMeta(key, maxIso(cursor, watermark));
   }
 
   private async pullTasks(userId: string, since: string): Promise<string> {
@@ -299,7 +466,12 @@ export class SyncEngine implements SyncService {
         .select('*')
         .eq('user_id', userId)
         .gt('server_updated_at', since)
+        // El `id` como desempate no es decorativo: varias tareas guardadas de una vez
+        // comparten `server_updated_at` al milisegundo, y sin un segundo criterio el orden
+        // entre ellas queda a merced del plan de consulta. Dos paginas pedidas con el
+        // mismo orden inestable pueden repetir una fila y saltarse otra.
         .order('server_updated_at', { ascending: true })
+        .order('id', { ascending: true })
         .range(offset, offset + appConfig.sync.pageSize - 1);
 
       if (error !== null) throw new Error(`Fallo al bajar tareas: ${error.message}`);
@@ -307,7 +479,7 @@ export class SyncEngine implements SyncService {
 
       for (const row of data as TaskRow[]) {
         const remote = rowToTask(row);
-        await this.applyRemote(this.database.tasks, remote.id, remote, remote.updatedAt);
+        await this.applyRemote(this.database.tasks, 'task', remote.id, remote, remote.updatedAt);
         watermark = maxIso(watermark, row.server_updated_at);
       }
 
@@ -332,7 +504,7 @@ export class SyncEngine implements SyncService {
 
     for (const row of (data ?? []) as CategoryRow[]) {
       const remote = rowToCategory(row);
-      await this.applyRemote(this.database.categories, remote.id, remote, remote.updatedAt);
+      await this.applyRemote(this.database.categories, 'category', remote.id, remote, remote.updatedAt);
       watermark = maxIso(watermark, row.server_updated_at);
     }
 
@@ -353,7 +525,7 @@ export class SyncEngine implements SyncService {
 
     for (const row of (data ?? []) as TagRow[]) {
       const remote = rowToTag(row);
-      await this.applyRemote(this.database.tags, remote.id, remote, remote.updatedAt);
+      await this.applyRemote(this.database.tags, 'tag', remote.id, remote, remote.updatedAt);
       watermark = maxIso(watermark, row.server_updated_at);
     }
 
@@ -374,7 +546,7 @@ export class SyncEngine implements SyncService {
 
     for (const row of (data ?? []) as FocusSessionRow[]) {
       const remote = rowToFocusSession(row);
-      await this.applyRemote(this.database.focusSessions, remote.id, remote, remote.updatedAt);
+      await this.applyRemote(this.database.focusSessions, 'focusSession', remote.id, remote, remote.updatedAt);
       watermark = maxIso(watermark, row.server_updated_at);
     }
 
@@ -391,6 +563,7 @@ export class SyncEngine implements SyncService {
    */
   private async applyRemote<T extends object>(
     table: SyncTable,
+    entity: SyncableEntity,
     id: string,
     remote: T,
     remoteUpdatedAt: string,
@@ -406,6 +579,22 @@ export class SyncEngine implements SyncService {
           console.info('[sync] se conserva la version local mas reciente', { id });
         }
         return;
+      }
+
+      /**
+       * GANA EL SERVIDOR: HAY QUE RETIRAR TAMBIEN LA ANOTACION LOCAL.
+       *
+       * Bajar `_dirty` a 0 no bastaba. La entrada de la cola seguia ahi con la foto vieja,
+       * y en la siguiente subida esa foto viajaba al servidor y REVERTIA el cambio que se
+       * acababa de aceptar -para todos los dispositivos, no solo para este-. El sintoma
+       * era desconcertante: la fecha aparecia correcta y unos minutos despues se deshacia
+       * sola, o una tarea completada volvia a estar pendiente sin que nadie la tocara.
+       *
+       * Se descarta solo lo que quedo obsoleto. Si el usuario ha vuelto a editar mientras
+       * tanto, su anotacion es mas nueva que la del servidor y tiene que subir igual.
+       */
+      if (localIsDirty) {
+        await this.outbox.discardStale(entity, id, remoteUpdatedAt);
       }
     }
 
@@ -445,6 +634,23 @@ export class SyncEngine implements SyncService {
     this.publish({ status: 'syncing' });
 
     try {
+      /**
+       * SE INTENTA SUBIR ANTES DE BORRAR NADA.
+       *
+       * Faltaba, y convertia el boton de auxilio en el mas destructivo de la app. Quien
+       * llega aqui suele ser justo quien tiene cambios que no han conseguido subir; borrar
+       * la cola de entrada los perdia definitivamente, y encima sin avisar, porque desde
+       * fuera esto se lee como "vuelve a bajarlo todo", no como "tira lo que no subio".
+       *
+       * Si la subida falla, se sigue igualmente: puede ser precisamente una fila corrupta
+       * lo que hay que limpiar. Pero se intenta primero, que es gratis.
+       */
+      try {
+        await this.push();
+      } catch {
+        /* Lo que no suba se pierde en el borrado: es el precio explicito de esta salida. */
+      }
+
       await this.outbox.clear();
       await Promise.all([
         this.database.tasks.clear(),
@@ -452,7 +658,9 @@ export class SyncEngine implements SyncService {
         this.database.tags.clear(),
         this.database.focusSessions.clear(),
       ]);
-      await this.database.setMeta(SYNC_META_KEYS.lastPulledAt, new Date(0).toISOString());
+      for (const entity of SYNCABLE_ENTITIES) {
+        await this.database.setMeta(pullCursorKey(entity, userId), EPOCH);
+      }
 
       await this.pull(userId);
 
@@ -484,54 +692,88 @@ export class SyncEngine implements SyncService {
     const userId = this.getUserId();
     if (userId === null || this.realtimeChannel !== null) return;
 
+    const filter = `user_id=eq.${userId}`;
+    const watch = { event: '*', schema: 'public', filter } as const;
+
     this.realtimeChannel = this.supabase
       .channel(`checklist:${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` },
-        (payload) => {
-          void this.applyRealtimeTask(payload.new as TaskRow | null);
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${userId}` },
-        (payload) => {
-          void this.applyRealtimeCategory(payload.new as CategoryRow | null);
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${userId}` },
-        (payload) => {
-          void this.applyRealtimeTag(payload.new as TagRow | null);
-        },
-      )
-      .subscribe();
+      .on('postgres_changes', { ...watch, table: 'tasks' }, (payload) => {
+        void this.applyRealtimeChange(this.database.tasks, 'task', payload, rowToTask);
+      })
+      .on('postgres_changes', { ...watch, table: 'categories' }, (payload) => {
+        void this.applyRealtimeChange(this.database.categories, 'category', payload, rowToCategory);
+      })
+      .on('postgres_changes', { ...watch, table: 'tags' }, (payload) => {
+        void this.applyRealtimeChange(this.database.tags, 'tag', payload, rowToTag);
+      })
+      .on('postgres_changes', { ...watch, table: 'focus_sessions' }, (payload) => {
+        void this.applyRealtimeChange(this.database.focusSessions, 'focusSession', payload, rowToFocusSession);
+      })
+      .subscribe((status) => {
+        this.onRealtimeStatus(status);
+      });
   }
 
   stopRealtime(): void {
     if (this.realtimeChannel === null) return;
     void this.supabase.removeChannel(this.realtimeChannel);
     this.realtimeChannel = null;
+    this.realtimeWasDropped = false;
   }
 
-  private async applyRealtimeTask(row: TaskRow | null): Promise<void> {
-    if (row?.id === undefined) return;
-    const task = rowToTask(row);
-    await this.applyRemote(this.database.tasks, task.id, task, task.updatedAt);
+  /**
+   * Cierra el hueco que deja el socket cuando se cae.
+   *
+   * Mientras Realtime esta desconectado los cambios no se encolan en ningun sitio: los
+   * eventos de ese rato sencillamente no existen. Sin esto, tapar la portatil media hora
+   * y volver a abrirla dejaba el dispositivo con datos viejos hasta que tocara el
+   * intervalo, y esa espera es justo la que se percibe como "no me sincroniza".
+   *
+   * Solo se baja tras una caida REAL, no en la primera conexion: al arrancar la sesion ya
+   * hay una bajada en marcha y duplicarla seria pedir lo mismo dos veces.
+   */
+  private onRealtimeStatus(status: string): void {
+    if (status === 'SUBSCRIBED') {
+      if (!this.realtimeWasDropped) return;
+      this.realtimeWasDropped = false;
+      void this.sync();
+      return;
+    }
+
+    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+      this.realtimeWasDropped = true;
+    }
   }
 
-  private async applyRealtimeCategory(row: CategoryRow | null): Promise<void> {
-    if (row?.id === undefined) return;
-    const category = rowToCategory(row);
-    await this.applyRemote(this.database.categories, category.id, category, category.updatedAt);
-  }
+  /**
+   * Aplica un evento en vivo por el MISMO camino que la bajada normal.
+   *
+   * Compartir `applyRemote` no es ahorro de lineas: es lo que garantiza que un cambio
+   * llegado por el socket y el mismo cambio llegado por una bajada dejen el dispositivo
+   * exactamente igual. Si fueran dos caminos, tendrian dos criterios de conflicto y el
+   * resultado dependeria de por cual llego antes.
+   */
+  private async applyRealtimeChange<TRow extends { id: string }, TEntity extends object>(
+    table: SyncTable,
+    entity: SyncableEntity,
+    payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+    toEntity: (row: TRow) => TEntity & { id: string; updatedAt: string },
+  ): Promise<void> {
+    // Un DELETE de verdad no trae la fila nueva, solo la clave de la vieja. La app borra
+    // marcando `deleted_at`, asi que esto solo salta si la fila desaparece de verdad
+    // -por ejemplo al borrarse la categoria que la arrastraba-, y entonces quedarsela
+    // seria mostrar algo que ya no existe en ningun otro dispositivo.
+    if (payload.eventType === 'DELETE') {
+      const id = (payload.old as { id?: string }).id;
+      if (id !== undefined) await table.delete(id);
+      return;
+    }
 
-  private async applyRealtimeTag(row: TagRow | null): Promise<void> {
-    if (row?.id === undefined) return;
-    const tag = rowToTag(row);
-    await this.applyRemote(this.database.tags, tag.id, tag, tag.updatedAt);
+    const row = payload.new as TRow;
+    if (typeof row.id !== 'string') return;
+
+    const remote = toEntity(row);
+    await this.applyRemote(table, entity, remote.id, remote, remote.updatedAt);
   }
 
   // -------------------------------------------------------------------------
@@ -543,3 +785,38 @@ export class SyncEngine implements SyncService {
 }
 
 const maxIso = (a: string, b: string): string => (Date.parse(a) >= Date.parse(b) ? a : b);
+
+/**
+ * Distingue "esta FILA es invalida" de "no se pudo hablar con el servidor".
+ *
+ * La diferencia decide si tiene sentido buscar una fila culpable y si vale la pena
+ * apuntarle un intento fallido. Sin ella, un tunel sin cobertura contaba lo mismo que una
+ * fila que viola una restriccion, y bastaban unas cuantas sincronizaciones con mala señal
+ * para descartar definitivamente cambios que no tenian nada de malo.
+ *
+ * Los codigos son SQLSTATE, que Postgres define y no cambian:
+ *   23xxx  violacion de integridad (check, clave foranea, unicidad, not null)
+ *   22xxx  dato fuera de rango o mal formado
+ *   42501  permisos insuficientes, que es como llega el rechazo de RLS
+ *
+ * Un error sin codigo -tipicamente un fallo de red que supabase-js envuelve- NO es de
+ * fila. Se interpreta a favor del dato: preferimos reintentar de mas antes que descartar
+ * un cambio del usuario por un problema de conexion.
+ */
+const EPOCH = new Date(0).toISOString();
+
+/**
+ * Se retrocede un poco sobre la marca guardada antes de preguntar.
+ *
+ * La comparacion en el servidor es estricta (`>`), asi que una fila escrita en el mismo
+ * instante exacto que la marca caeria fuera de esta bajada y de todas las siguientes. El
+ * solape la recupera; el coste es volver a recibir alguna fila ya conocida, que al
+ * aplicarse por id no cambia nada.
+ */
+const sinceFor = (cursor: string): string =>
+  new Date(Date.parse(cursor) - appConfig.sync.pullOverlapMs).toISOString();
+
+const isRowRejection = (code: string | undefined): boolean => {
+  if (code === undefined || code === '') return false;
+  return code.startsWith('23') || code.startsWith('22') || code === '42501';
+};

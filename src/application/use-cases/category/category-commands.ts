@@ -75,6 +75,37 @@ export class UpdateCategoryUseCase implements UseCase<UpdateCategoryCommand, Cat
 
     const { categoryId: _id, ...patch } = command;
 
+    /**
+     * RENOMBRAR TAMBIEN TIENE QUE COMPROBAR EL DUPLICADO.
+     *
+     * Crear ya lo comprobaba; renombrar no, y el servidor tiene un indice unico por
+     * (usuario, nombre). Bastaba escribir en "Cursos" un nombre que ya existia -"Trabajo"-
+     * para producir una fila que la app aceptaba y el servidor rechazaba siempre. Como las
+     * categorias se suben antes que las tareas, esa unica fila arrastraba consigo el resto
+     * de la cola.
+     *
+     * Se compara normalizando -sin acentos ni mayusculas-, igual que al crear: el indice
+     * del servidor no distingue "Cursos" de "cursos" y la app tampoco debe hacerlo.
+     */
+    if (patch.name !== undefined) {
+      const siblings = await this.context.categories.findAll();
+      if (isErr(siblings)) return siblings;
+
+      const needle = normalizeForSearch(patch.name);
+      const duplicate = siblings.value.some(
+        (category) =>
+          category.id !== command.categoryId &&
+          category.deletedAt === null &&
+          normalizeForSearch(category.name) === needle,
+      );
+
+      if (duplicate) {
+        return err(
+          DomainErrors.conflict('Ya tienes una categoria con ese nombre.', { field: 'name' }),
+        );
+      }
+    }
+
     const updated = updateCategory(found.value, patch, this.context.clock.now().toISOString());
     if (isErr(updated)) return updated;
 

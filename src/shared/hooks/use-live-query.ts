@@ -8,6 +8,7 @@ import type { Task } from '../../domain/task/task';
 import type { TaskId } from '../../domain/shared/branded';
 
 import { db } from '../../infrastructure/persistence/database';
+import { Outbox } from '../../infrastructure/persistence/outbox';
 import { stripHints } from '../../infrastructure/persistence/records';
 
 /**
@@ -99,8 +100,17 @@ export const useActiveFocusSession = (): FocusSession | null | undefined =>
     return open[0] ?? null;
   }, []);
 
+/**
+ * Cuantos cambios siguen en camino a la nube.
+ *
+ * Cuenta solo los que aun se reintentan solos. Los que el servidor ya rechazo demasiadas
+ * veces se cuentan aparte, en el estado de sincronizacion: mezclarlos aqui dejaba el
+ * indicador clavado en "3 por subir" indefinidamente, y ademas hacia que el disparador de
+ * "sincronizar poco despues de escribir" viera cola pendiente donde no habia nada que
+ * ningun reintento fuera a resolver.
+ */
 export const usePendingOutboxCount = (): number =>
-  useLiveQuery(() => db.outbox.count(), [], 0) ?? 0;
+  useLiveQuery(() => new Outbox(db).pendingCount(), [], 0) ?? 0;
 
 /** Indices por id: evita un `find()` dentro del bucle de renderizado de la lista. */
 export const useCategoryIndex = (): Map<string, Category> => {

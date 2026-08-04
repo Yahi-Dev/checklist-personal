@@ -38,6 +38,10 @@ export interface AdoptLocalDataCommand {
 export interface ForeignOwner {
   readonly userId: UserId;
   readonly tareas: number;
+  readonly categorias: number;
+  readonly etiquetas: number;
+  /** Todo junto, que es lo que decide si hay algo que ofrecer. */
+  readonly total: number;
 }
 
 /**
@@ -63,13 +67,44 @@ export class FindForeignDataUseCase implements UseCase<void, ForeignOwner[]> {
     const tasks = await this.context.tasks.findAll({ includeDeleted: true });
     if (isErr(tasks)) return tasks;
 
-    const counts = new Map<UserId, number>();
-    for (const task of tasks.value) {
-      if (task.userId === owner.id) continue;
-      counts.set(task.userId, (counts.get(task.userId) ?? 0) + 1);
-    }
+    const categories = await this.context.categories.findAll({ includeDeleted: true });
+    if (isErr(categories)) return categories;
 
-    return ok([...counts].map(([userId, tareas]) => ({ userId, tareas })));
+    const tags = await this.context.tags.findAll({ includeDeleted: true });
+    if (isErr(tags)) return tags;
+
+    /**
+     * SE MIRAN LAS TRES TABLAS, NO SOLO LAS TAREAS.
+     *
+     * Contar unicamente tareas dejaba fuera el caso que de verdad se dio: una CATEGORIA
+     * heredada de otra sesion, sin ninguna tarea detras. No se ofrecia adoptarla, asi que
+     * se quedaba en la cola rechazada para siempre; y como las categorias se suben antes
+     * que las tareas y un fallo cortaba la subida entera, esa unica fila invisible bastaba
+     * para que el dispositivo no volviera a subir NADA.
+     *
+     * La subida ya no se corta asi, pero el aviso tiene que cubrir igualmente las tres:
+     * una categoria ajena sigue siendo un cambio que nunca va a llegar a la nube, y el
+     * usuario merece enterarse en vez de descubrirlo comparando dispositivos.
+     */
+    const counts = new Map<UserId, { tareas: number; categorias: number; etiquetas: number }>();
+
+    const bump = (userId: UserId, field: 'tareas' | 'categorias' | 'etiquetas'): void => {
+      if (userId === owner.id) return;
+      const entry = counts.get(userId) ?? { tareas: 0, categorias: 0, etiquetas: 0 };
+      counts.set(userId, { ...entry, [field]: entry[field] + 1 });
+    };
+
+    for (const task of tasks.value) bump(task.userId, 'tareas');
+    for (const category of categories.value) bump(category.userId, 'categorias');
+    for (const tag of tags.value) bump(tag.userId, 'etiquetas');
+
+    return ok(
+      [...counts].map(([userId, tally]) => ({
+        userId,
+        ...tally,
+        total: tally.tareas + tally.categorias + tally.etiquetas,
+      })),
+    );
   }
 }
 

@@ -7,6 +7,8 @@ import type { Result } from '../shared/result';
 import type { Subtask } from './subtask';
 import type { TaskStatus } from './value-objects/task-status';
 
+import type { DomainError } from '../shared/domain-error';
+
 import { DomainErrors } from '../shared/domain-error';
 import { MAX_ATTACHMENTS_PER_TASK } from './attachment';
 import { MAX_SUBTASKS_PER_TASK, allSubtasksDone, subtaskProgress } from './subtask';
@@ -119,13 +121,8 @@ export const createTask = (input: CreateTaskInput): Result<Task> =>
     }
 
     const estimated = input.estimatedPomodoros ?? null;
-    if (estimated !== null && (!Number.isInteger(estimated) || estimated < 1 || estimated > 50)) {
-      return err(
-        DomainErrors.validation('Los pomodoros estimados deben ser un entero entre 1 y 50.', {
-          field: 'estimatedPomodoros',
-        }),
-      );
-    }
+    const estimatedError = validateEstimatedPomodoros(estimated);
+    if (estimatedError !== null) return err(estimatedError);
 
     return ok({
       id: input.id,
@@ -200,6 +197,12 @@ export const updateTask = (task: Task, patch: UpdateTaskPatch, now: IsoDateTime)
     );
   }
 
+  const estimated =
+    patch.estimatedPomodoros !== undefined ? patch.estimatedPomodoros : task.estimatedPomodoros;
+
+  const estimatedError = validateEstimatedPomodoros(estimated);
+  if (estimatedError !== null) return err(estimatedError);
+
   return ok({
     ...task,
     title: titleResult.value,
@@ -212,8 +215,7 @@ export const updateTask = (task: Task, patch: UpdateTaskPatch, now: IsoDateTime)
     categoryId: patch.categoryId !== undefined ? patch.categoryId : task.categoryId,
     tagIds: patch.tagIds !== undefined ? [...new Set(patch.tagIds)] : task.tagIds,
     recurrence,
-    estimatedPomodoros:
-      patch.estimatedPomodoros !== undefined ? patch.estimatedPomodoros : task.estimatedPomodoros,
+    estimatedPomodoros: estimated,
     location: patch.location !== undefined ? patch.location : task.location,
     position: patch.position ?? task.position,
     updatedAt: now,
@@ -323,7 +325,20 @@ export const archiveTask = (task: Task, now: IsoDateTime): Result<Task> => {
   if (!canTransition(task.status, 'archived')) {
     return err(DomainErrors.conflict('Esa tarea no se puede archivar.'));
   }
-  return ok({ ...task, status: 'archived', updatedAt: now });
+
+  /**
+   * ARCHIVAR LIMPIA LA FECHA DE COMPLETADO, y no es un detalle cosmetico.
+   *
+   * La regla del modelo es "esta completada si y solo si tiene fecha de completado", y el
+   * servidor la impone con una restriccion. Archivar una tarea YA COMPLETADA -que es el
+   * camino normal: se termina algo y se quita de en medio- producia `archived` con fecha
+   * de completado, o sea una fila que el servidor rechaza siempre.
+   *
+   * El efecto no se quedaba en esa tarea. La fila rechazada volvia en cada intento, se
+   * llevaba consigo el resto del lote y acababa descartada sin que nada lo dijera: bastaba
+   * archivar una tarea terminada para que ese dispositivo dejara de subir.
+   */
+  return ok({ ...task, status: 'archived', completedAt: null, updatedAt: now });
 };
 
 export const restoreTask = (task: Task, now: IsoDateTime): Result<Task> =>
@@ -496,10 +511,40 @@ const resetSubtasksForNextOccurrence = (
     updatedAt: deps.now,
   }));
 
+/**
+ * Tope de las notas. Es el MISMO numero que la restriccion del servidor, a proposito.
+ *
+ * Sin el, pegar un acta de reunion o un correo entero en las notas creaba una tarea que la
+ * app aceptaba y el servidor rechazaba para siempre. El limite tiene que vivir aqui, en el
+ * dominio, y no solo en el formulario: la importacion de respaldos y cualquier pantalla
+ * futura pasan por aqui, no por ese formulario.
+ */
+export const MAX_NOTES_LENGTH = 20_000;
+
+/**
+ * El rango que acepta el servidor, comprobado en un solo sitio.
+ *
+ * Estaba escrito a mano dentro de `createTask` y no existia en `updateTask`, asi que crear
+ * una tarea con 75 pomodoros era imposible pero cambiarsela a 75 despues no: la fila salia
+ * valida de la app y el servidor la rechazaba. Extraerlo es lo que impide que los dos
+ * caminos vuelvan a discrepar.
+ */
+const validateEstimatedPomodoros = (estimated: number | null): DomainError | null => {
+  if (estimated === null) return null;
+  if (Number.isInteger(estimated) && estimated >= 1 && estimated <= 50) return null;
+
+  return DomainErrors.validation('Los pomodoros estimados deben ser un entero entre 1 y 50.', {
+    field: 'estimatedPomodoros',
+  });
+};
+
 const normalizeNotes = (notes: string | null | undefined): string | null => {
   if (notes === null || notes === undefined) return null;
   const trimmed = notes.trim();
-  return trimmed.length === 0 ? null : trimmed;
+  if (trimmed.length === 0) return null;
+  // Se recorta en vez de rechazar: quien pega un texto largo quiere guardar la tarea, y
+  // perder el sobrante es mucho menos malo que perder la tarea entera.
+  return trimmed.slice(0, MAX_NOTES_LENGTH);
 };
 
 /** Instante actual como ISO. Atajo para las pruebas; la app usa el puerto `Clock`. */

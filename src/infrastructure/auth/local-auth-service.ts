@@ -77,6 +77,8 @@ export class NullSyncService {
     lastSyncedAt: null,
     pendingOperations: 0,
     lastError: null,
+    blockedOperations: 0,
+    blockedReason: null,
   };
 
   async sync(): Promise<Result<typeof this.state>> {
@@ -84,6 +86,10 @@ export class NullSyncService {
   }
 
   async fullResync(): Promise<Result<typeof this.state>> {
+    return ok(this.state);
+  }
+
+  async retryBlocked(): Promise<Result<typeof this.state>> {
     return ok(this.state);
   }
 

@@ -11,10 +11,12 @@ import {
 import { defaultRecurrenceRule } from '../../src/domain/recurrence/recurrence-rule';
 import { isErr, isOk, unwrap } from '../../src/domain/shared/result';
 import {
+  archiveTask,
   attachSubtask,
   completeTask,
   createTask,
   isOverdue,
+  MAX_NOTES_LENGTH,
   snoozeTask,
   softDeleteTask,
   taskProgress,
@@ -307,5 +309,47 @@ describe('actualizacion', () => {
     updateTask(task, { title: 'Otro titulo' }, NOW);
 
     expect(task.title).toBe('Sacar la basura');
+  });
+});
+
+/**
+ * Reglas que el SERVIDOR impone con restricciones.
+ *
+ * No son caprichos del modelo: cada una corresponde a un `check` de la tabla `tasks`. Que
+ * el dominio pueda producir una tarea que el servidor rechaza no da un error visible en
+ * ninguna parte -la app la guarda y la enseña tan contenta-, sino una fila que se queda
+ * atascada en la cola de subida y arrastra consigo a las demas. Por eso se prueban aqui.
+ */
+describe('invariantes que el servidor tambien exige', () => {
+  it('archivar una tarea completada le quita la fecha de completado', () => {
+    // `check ((status = 'completed') = (completed_at is not null))`. Archivar una tarea ya
+    // terminada -el camino normal: la acabas y la quitas de en medio- dejaba `archived`
+    // CON fecha de completado, o sea una fila que el servidor rechaza siempre.
+    const task = baseTask();
+    const { completed } = unwrap(completeTask(task, { now: NOW, nextTaskId, nextSubtaskId }));
+    expect(completed.completedAt).not.toBeNull();
+
+    const archived = unwrap(archiveTask(completed, '2026-08-02T13:00:00.000Z'));
+
+    expect(archived.status).toBe('archived');
+    expect(archived.completedAt).toBeNull();
+  });
+
+  it('recorta las notas al maximo que acepta el servidor', () => {
+    // `check (char_length(notes) <= 20000)`. Pegar un correo entero en las notas creaba
+    // una tarea que la app aceptaba y el servidor no.
+    const task = baseTask({ notes: 'x'.repeat(MAX_NOTES_LENGTH + 5000) });
+
+    expect(task.notes).toHaveLength(MAX_NOTES_LENGTH);
+  });
+
+  it('tambien valida los pomodoros AL ACTUALIZAR, no solo al crear', () => {
+    // `check (estimated_pomodoros between 1 and 50)`. Crear con 75 era imposible; cambiarlo
+    // a 75 despues, no. Los dos caminos tienen que dar el mismo resultado.
+    const task = baseTask();
+
+    expect(isErr(updateTask(task, { estimatedPomodoros: 75 }, NOW))).toBe(true);
+    expect(isErr(updateTask(task, { estimatedPomodoros: 0 }, NOW))).toBe(true);
+    expect(isOk(updateTask(task, { estimatedPomodoros: 4 }, NOW))).toBe(true);
   });
 });

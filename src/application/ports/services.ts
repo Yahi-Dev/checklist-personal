@@ -91,9 +91,20 @@ export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error';
 export interface SyncState {
   readonly status: SyncStatus;
   readonly lastSyncedAt: IsoDateTime | null;
-  /** Cuantas operaciones locales esperan subir. */
+  /** Cuantas operaciones locales esperan subir y aun se reintentan solas. */
   readonly pendingOperations: number;
   readonly lastError: string | null;
+  /**
+   * Cambios que el servidor rechazo tantas veces que ya no se reintentan.
+   *
+   * Se cuentan aparte de los pendientes porque no son lo mismo y confundirlos es lo que
+   * hacia que el problema fuera invisible: un dispositivo podia llevar dias sin subir
+   * nada mientras enseñaba un "todo sincronizado" perfectamente sincero segun sus
+   * propias cuentas. Esto no se arregla esperando, asi que se enseña y se ofrece salida.
+   */
+  readonly blockedOperations: number;
+  /** Lo que dijo el servidor sobre lo atascado, tal cual, para poder diagnosticarlo. */
+  readonly blockedReason: string | null;
 }
 
 export interface SyncService {
@@ -101,6 +112,16 @@ export interface SyncService {
   sync(): Promise<Result<SyncState>>;
   /** Descarta el estado local y vuelve a bajarlo todo. */
   fullResync(): Promise<Result<SyncState>>;
+  /**
+   * Devuelve a la cola lo que se habia dado por perdido y lo intenta otra vez.
+   *
+   * Existe porque la causa mas habitual de que algo se atasque -una sesion caducada, una
+   * categoria que aun no habia subido, permisos recien arreglados- se resuelve FUERA de
+   * la app. Sin esta puerta, el unico camino de vuelta seria la resincronizacion completa,
+   * que empieza por borrar la copia local: para recuperar tres cambios atascados habria
+   * que arriesgar todo lo demas.
+   */
+  retryBlocked(): Promise<Result<SyncState>>;
   getState(): SyncState;
   subscribe(listener: (state: SyncState) => void): () => void;
   /** Abre la escucha en tiempo real para que los cambios lleguen sin recargar. */

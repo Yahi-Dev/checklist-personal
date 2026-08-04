@@ -11,10 +11,15 @@ interface SyncContextValue {
   readonly state: SyncState;
   readonly syncNow: () => void;
   readonly fullResync: () => Promise<void>;
+  /** Devuelve a la cola lo que el servidor rechazo y vuelve a intentarlo. */
+  readonly retryBlocked: () => void;
   readonly isOnline: boolean;
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
+
+/** Cada cuanto se comprueba si toca sincronizar o si el equipo estuvo suspendido. */
+const HEARTBEAT_MS = 30_000;
 
 /**
  * Decide CUANDO sincronizar.
@@ -62,26 +67,61 @@ export const SyncProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (user === null) return;
 
+    const syncNow = () => void container.sync.sync();
+
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void container.sync.sync();
+      if (document.visibilityState === 'visible') syncNow();
     };
 
     document.addEventListener('visibilitychange', onVisible);
 
-    const interval = window.setInterval(
-      () => void container.sync.sync(),
-      Math.max(1, appConfig.sync.intervalMinutes) * 60_000,
-    );
+    /**
+     * Volver a la ventana, ademas de volver a la pestaña.
+     *
+     * `visibilitychange` NO se dispara al recuperar el foco si la ventana ya estaba
+     * visible, y ese es justo el caso de la aplicacion de escritorio: se deja abierta en un
+     * monitor, se trabaja en otra cosa, se vuelve. Sin este oyente, ese regreso -que es
+     * exactamente cuando se mira si el telefono hizo algo- no comprobaba nada.
+     */
+    window.addEventListener('focus', syncNow);
+
+    /**
+     * LATIDO QUE SE DA CUENTA DE QUE EL EQUIPO ESTUVO DORMIDO.
+     *
+     * Un `setInterval` de cinco minutos no corre mientras la maquina esta suspendida: al
+     * despertar, el navegador dispara el que quedo a medias y sigue como si nada. Tapar la
+     * portatil una noche entera y abrirla podia significar hasta cinco minutos mas de datos
+     * viejos, que es precisamente el momento en que uno mira si el telefono hizo algo.
+     *
+     * Se comprueba con un reloj de pared en vez de confiar en el temporizador: si entre dos
+     * latidos ha pasado mucho mas de lo que deberia, es que hubo suspension, y entonces se
+     * sincroniza ya. Un intervalo corto -medio minuto- que casi siempre no hace nada sale
+     * mucho mas barato que uno largo que llega tarde.
+     */
+    const periodMs = Math.max(1, appConfig.sync.intervalMinutes) * 60_000;
+    let lastTick = Date.now();
+    let lastSync = Date.now();
+
+    const heartbeat = window.setInterval(() => {
+      const now = Date.now();
+      const slept = now - lastTick > HEARTBEAT_MS * 4;
+      lastTick = now;
+
+      if (slept || now - lastSync >= periodMs) {
+        lastSync = now;
+        syncNow();
+      }
+    }, HEARTBEAT_MS);
 
     // `pagehide` y no `beforeunload`: en iOS `beforeunload` no se dispara de forma
     // fiable al cambiar de app, y ese es justo el momento en que hay que vaciar la cola.
-    const onLeaving = () => void container.sync.sync();
-    window.addEventListener('pagehide', onLeaving);
+    window.addEventListener('pagehide', syncNow);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('pagehide', onLeaving);
-      window.clearInterval(interval);
+      window.removeEventListener('focus', syncNow);
+      window.removeEventListener('pagehide', syncNow);
+      window.clearInterval(heartbeat);
     };
   }, [container, user]);
 
@@ -116,6 +156,7 @@ export const SyncProvider = ({ children }: { children: ReactNode }) => {
       state,
       isOnline,
       syncNow: () => void container.sync.sync(),
+      retryBlocked: () => void container.sync.retryBlocked(),
       fullResync: async () => {
         await container.sync.fullResync();
       },
