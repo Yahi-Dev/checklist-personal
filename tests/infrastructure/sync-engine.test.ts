@@ -280,6 +280,84 @@ describe('SyncEngine', () => {
     });
   });
 
+  describe('categorias duplicadas por nombre', () => {
+    /**
+     * El 409 que salio en produccion, reproducido.
+     *
+     * Un dispositivo recien instalado sembraba sus cinco categorias por defecto antes de
+     * bajar nada. La cuenta ya las tenia, creadas en otro aparato, con los mismos nombres y
+     * OTROS identificadores. El indice unico por (usuario, nombre) rechaza las locales para
+     * siempre, y las tareas que apuntan a ellas fallan ademas por clave foranea: 409 en las
+     * dos tablas a la vez, en bucle.
+     */
+    const guardarCategoria = async (
+      id: string,
+      name: string,
+      dirty: 0 | 1,
+    ): Promise<void> => {
+      await database.categories.put({
+        id: brandId('cat-' + id),
+        userId: USER,
+        name,
+        color: '#6366f1',
+        icon: 'house',
+        position: 0,
+        createdAt: NOW,
+        updatedAt: NOW,
+        deletedAt: null,
+        _dirty: dirty,
+        _deleted: 0,
+      } as never);
+    };
+
+    it('funde la local con la del servidor y manda sus tareas a la que queda', async () => {
+      await guardarCategoria('servidor', 'Trabajo', 0); // vino de la nube
+      await guardarCategoria('local', 'Trabajo', 1); // sembrada aqui, nunca subio
+      await outbox.enqueue('category', 'cat-local', 'upsert', { id: 'cat-local' }, NOW);
+
+      const task = makeTask();
+      await tasks.save({ ...task, categoryId: brandId('cat-local') });
+
+      const { client } = makeSupabase({});
+      await engineFor(client).sync();
+
+      // La duplicada desaparece del todo: nunca existio en el servidor, no hay nada que
+      // propagar, y dejarla solo lograria reintentar para siempre algo que ya no esta.
+      expect(await database.categories.get(brandId('cat-local'))).toBeUndefined();
+      expect(await database.categories.get(brandId('cat-servidor'))).toBeDefined();
+
+      // Y la tarea acaba apuntando a la que si existe en el servidor, que es lo que ademas
+      // desatasca su clave foranea.
+      const movida = await database.tasks.get(task.id);
+      expect(movida?.categoryId).toBe('cat-servidor');
+
+      // No queda rastro en la cola de la categoria fundida.
+      const pendientes = await outbox.pending();
+      expect(pendientes.some((entry) => entry.entityId === 'cat-local')).toBe(false);
+    });
+
+    it('no toca nada si las dos son locales: no habria forma de saber cual sobra', async () => {
+      await guardarCategoria('una', 'Trabajo', 1);
+      await guardarCategoria('otra', 'Trabajo', 1);
+
+      const { client } = makeSupabase({});
+      await engineFor(client).sync();
+
+      expect(await database.categories.get(brandId('cat-una'))).toBeDefined();
+      expect(await database.categories.get(brandId('cat-otra'))).toBeDefined();
+    });
+
+    it('no funde categorias con nombres distintos', async () => {
+      await guardarCategoria('servidor', 'Trabajo', 0);
+      await guardarCategoria('local', 'Personal', 1);
+
+      const { client } = makeSupabase({});
+      await engineFor(client).sync();
+
+      expect(await database.categories.get(brandId('cat-local'))).toBeDefined();
+    });
+  });
+
   describe('cuando gana la version del servidor', () => {
     it('retira tambien la anotacion local, para que no revierta el cambio despues', async () => {
       /**

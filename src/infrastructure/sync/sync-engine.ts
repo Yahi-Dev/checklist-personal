@@ -1,4 +1,8 @@
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import type { Table } from 'dexie';
+
+import type { CategoryId } from '../../domain/shared/branded';
+import type { Task } from '../../domain/task/task';
 
 import type { AppDatabase } from '../persistence/database';
 import type { AppSupabaseClient } from '../supabase/client';
@@ -8,9 +12,16 @@ import type { Result } from '../../domain/shared/result';
 import type { SyncService, SyncState } from '../../application/ports/services';
 
 import { appConfig } from '../../shared/config/app-config';
+import { brandId } from '../../domain/shared/branded';
 import { err, ok } from '../../domain/shared/result';
 import { Outbox } from '../persistence/outbox';
-import { pullCursorKey, SYNC_META_KEYS, SYNCABLE_ENTITIES, withHints } from '../persistence/records';
+import {
+  pullCursorKey,
+  stripHints,
+  SYNC_META_KEYS,
+  SYNCABLE_ENTITIES,
+  withHints,
+} from '../persistence/records';
 import { TABLE_FOR_ENTITY } from '../supabase/database.types';
 import { DomainErrors, toDomainError } from '../../domain/shared/domain-error';
 import {
@@ -182,6 +193,12 @@ export class SyncEngine implements SyncService {
     const failures: string[] = [];
 
     try {
+      await this.reconcileDuplicates();
+    } catch (cause) {
+      failures.push(toDomainError(cause, 'No se pudo reconciliar.').message);
+    }
+
+    try {
       await this.push();
     } catch (cause) {
       failures.push(toDomainError(cause, 'No se pudo subir.').message);
@@ -191,6 +208,23 @@ export class SyncEngine implements SyncService {
       await this.pull(userId);
     } catch (cause) {
       failures.push(toDomainError(cause, 'No se pudo bajar.').message);
+    }
+
+    /**
+     * SEGUNDA RECONCILIACION, DESPUES DE BAJAR.
+     *
+     * Es la que resuelve el caso de verdad. Una categoria local solo se revela como
+     * duplicada cuando llega su gemela del servidor, y eso pasa en la bajada que acaba de
+     * terminar: reconciliar unicamente antes de subir dejaba el arreglo para la
+     * sincronizacion siguiente, y mientras tanto el dispositivo seguia dando errores.
+     *
+     * Solo se vuelve a subir si de verdad se fundio algo, para no hacer un viaje de mas en
+     * las sincronizaciones normales, que son la inmensa mayoria.
+     */
+    try {
+      if (await this.reconcileDuplicates()) await this.push();
+    } catch (cause) {
+      failures.push(toDomainError(cause, 'No se pudo reconciliar.').message);
     }
 
     const queue = await this.queueSummary();
@@ -229,6 +263,111 @@ export class SyncEngine implements SyncService {
   async retryBlocked(): Promise<Result<SyncState>> {
     await this.outbox.retryPoisoned();
     return this.sync();
+  }
+
+  // -------------------------------------------------------------------------
+  // Reconciliacion
+  // -------------------------------------------------------------------------
+
+  /**
+   * Funde las categorias y etiquetas locales que DUPLICAN a las del servidor.
+   *
+   * EL CASO REAL, QUE NO ES HIPOTETICO.
+   *
+   * Un dispositivo recien instalado sembraba sus cinco categorias por defecto -"Personal",
+   * "Trabajo"...- antes de bajar nada. La cuenta ya tenia esas mismas cinco creadas en otro
+   * aparato, con los mismos nombres y OTROS identificadores. El servidor tiene un indice
+   * unico por (usuario, nombre en minusculas), asi que las locales no podian subir jamas:
+   * no es un fallo transitorio, es un choque permanente.
+   *
+   * Y no se quedaba ahi. Las tareas creadas en ese dispositivo apuntaban a la categoria
+   * local, que no existe en el servidor, asi que ADEMAS fallaban por clave foranea. De ahi
+   * la lluvia de 409 en las dos tablas a la vez.
+   *
+   * Sembrar despues de la primera bajada evita que vuelva a pasar, pero no arregla los
+   * duplicados que ya existen en los dispositivos. Esto si.
+   *
+   * SOLO SE FUNDE UN CASO, Y LA ESTRECHEZ ES DELIBERADA: una categoria que NUNCA llego al
+   * servidor contra otra con el mismo nombre que SI vino de el. Ahi no hay ambiguedad
+   * posible sobre cual sobra. Si las dos son locales no se toca nada: no habria forma de
+   * saber cual conservar, y equivocarse aqui significa borrar algo del usuario.
+   *
+   * La local se borra del todo en vez de marcarse como borrada: nunca existio en el
+   * servidor, asi que no hay nada que propagar y subir una fila borrada solo dejaria basura.
+   */
+  /** Devuelve `true` si fundio algo, para que quien llama sepa si hay que volver a subir. */
+  private async reconcileDuplicates(): Promise<boolean> {
+    const categorias = await this.mergeDuplicates('category', this.database.categories, (row) =>
+      row.name.trim().toLowerCase(),
+    );
+
+    // El servidor deduplica las etiquetas por `slug`, no por nombre: "Urgente" y "urgente"
+    // son la misma. Se usa la misma clave que el indice para no fundir de mas ni de menos.
+    const etiquetas = await this.mergeDuplicates('tag', this.database.tags, (row) =>
+      row.slug.trim().toLowerCase(),
+    );
+
+    return categorias || etiquetas;
+  }
+
+  private async mergeDuplicates<T extends { id: string } & IndexHints>(
+    entity: 'category' | 'tag',
+    table: Table<T, string>,
+    keyOf: (row: T) => string,
+  ): Promise<boolean> {
+    const rows = (await table.toArray()).filter((row) => row._deleted !== 1);
+    let merged = false;
+
+    const groups = new Map<string, T[]>();
+    for (const row of rows) {
+      const key = keyOf(row);
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+
+      const keeper = group.find((row) => row._dirty === 0);
+      if (keeper === undefined) continue;
+
+      for (const duplicate of group) {
+        if (duplicate.id === keeper.id || duplicate._dirty !== 1) continue;
+
+        if (entity === 'category') await this.repointTasks(duplicate.id, keeper.id);
+
+        await this.outbox.forget(entity, duplicate.id);
+        await table.delete(duplicate.id);
+
+        merged = true;
+
+        if (appConfig.sync.debug) {
+          console.info('[sync] duplicado fundido', { entity, de: duplicate.id, a: keeper.id });
+        }
+      }
+    }
+
+    return merged;
+  }
+
+  /**
+   * Manda las tareas de la categoria duplicada a la que se conserva.
+   *
+   * Sin esto, fundir la categoria dejaria las tareas apuntando a un identificador que ya no
+   * existe en ninguna parte: perderian su categoria en la pantalla y seguirian sin poder
+   * subir, que es exactamente el problema que se venia a resolver.
+   */
+  private async repointTasks(from: string, to: string): Promise<void> {
+    const affected = await this.database.tasks.where('categoryId').equals(from).toArray();
+    const now = new Date().toISOString();
+
+    for (const record of affected) {
+      const moved = withHints(
+        { ...stripHints<Task>(record), categoryId: brandId<CategoryId>(to), updatedAt: now },
+        true,
+      );
+      await this.database.tasks.put(moved);
+      await this.outbox.enqueue('task', record.id, 'upsert', stripHints(moved), now);
+    }
   }
 
   // -------------------------------------------------------------------------

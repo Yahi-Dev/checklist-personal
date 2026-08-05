@@ -171,6 +171,25 @@ export class Outbox {
     });
   }
 
+  /**
+   * Olvida por completo lo pendiente de una entidad, porque ya no hay nada que subir.
+   *
+   * Distinto de `discardStale`, que descarta una foto vieja porque llego una mas nueva del
+   * servidor. Esto es para cuando la entidad DEJA DE EXISTIR en local sin haber llegado
+   * nunca al servidor: fundir un duplicado, por ejemplo. Conservar su anotacion solo
+   * lograria intentar subir para siempre algo que ya no esta.
+   */
+  async forget(entity: SyncableEntity, entityId: string): Promise<void> {
+    const existing = await this.database.outbox
+      .where('[entity+entityId]')
+      .equals([entity, entityId])
+      .toArray();
+
+    await this.database.outbox.bulkDelete(
+      existing.map((entry) => entry.seq).filter((seq): seq is number => seq !== undefined),
+    );
+  }
+
   /** Entradas que agotaron los reintentos: necesitan intervencion del usuario. */
   async poisoned(): Promise<OutboxEntry[]> {
     return this.database.outbox.where('attempts').aboveOrEqual(Outbox.MAX_ATTEMPTS).sortBy('seq');
