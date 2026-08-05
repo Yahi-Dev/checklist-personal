@@ -40,6 +40,18 @@ describe('arranque de la aplicacion', () => {
     ).toBeGreaterThan(0);
   });
 
+  /**
+   * El tiempo limite se sube A PROPOSITO por encima del `waitFor` de dentro.
+   *
+   * Con los 5 s por defecto de vitest, el limite del test y el de la espera eran EL MISMO
+   * numero, asi que no quedaba ni un milisegundo para montar la aplicacion entera ni para
+   * teclear treinta caracteres: el test moria por arriba justo cuando la espera todavia
+   * tenia margen. Se caia una vez de cada tres, y siempre parecia culpa del ultimo cambio
+   * que hubiera tocado el arranque, porque cualquier nodo de mas lo empujaba al limite.
+   *
+   * Ahora el presupuesto es coherente: montar y escribir por su cuenta, y hasta 5 s de
+   * espera POR ENCIMA de eso.
+   */
   it('crea una tarea de verdad escribiendo en la captura rapida', async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -56,5 +68,5 @@ describe('arranque de la aplicacion', () => {
       },
       { timeout: 5000 },
     );
-  });
+  }, 20_000);
 });

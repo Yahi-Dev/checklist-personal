@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CalendarCheck,
   CalendarDays,
   CheckSquare,
   Inbox,
@@ -51,6 +52,9 @@ const NAVIGATION: readonly NavigationEntry[] = [
   { to: '/proximas', label: 'Proximas', icon: Inbox, primary: true },
   { to: '/buscar', label: 'Buscar', icon: Search, primary: true },
   { to: '/calendario', label: 'Calendario', icon: CalendarDays, primary: false },
+  // Secundaria y no en la barra inferior: se consulta -al cerrar la semana, al pasar un
+  // reporte-, no se vive en ella. La barra movil solo tiene sitio para lo del dia a dia.
+  { to: '/completadas', label: 'Completadas', icon: CalendarCheck, primary: false },
   { to: '/enfoque', label: 'Enfoque', icon: Timer, primary: false },
   { to: '/estadisticas', label: 'Estadisticas', icon: BarChart3, primary: false },
   { to: '/ajustes', label: 'Ajustes', icon: Settings, primary: true },

@@ -95,6 +95,32 @@ export const wasCompletedOnSpec = (reference: Date): Specification<Task> => {
   });
 };
 
+/**
+ * Se completo dentro de un rango, extremos incluidos.
+ *
+ * Se mira `completedAt` y NO `status`, que son dos preguntas distintas y confundirlas
+ * daria un historial mentiroso: archivar una tarea terminada la saca de `completed` sin
+ * que deje de ser algo que se hizo ese dia. Quien quiera ademas restringir el estado lo
+ * compone aparte; aqui la pregunta es solo cuando se termino.
+ */
+export const wasCompletedBetweenSpec = (from: Date, to: Date): Specification<Task> => {
+  const start = from.getTime();
+  const end = to.getTime();
+
+  return spec((task) => {
+    if (task.completedAt === null) return false;
+    const completed = Date.parse(task.completedAt);
+    return completed >= start && completed <= end;
+  });
+};
+
+/** Se completo alguna vez, sin importar cuando. */
+export const wasCompletedSpec = (): Specification<Task> =>
+  and(
+    notDeleted(),
+    spec((task) => task.completedAt !== null),
+  );
+
 // --- Clasificacion ---------------------------------------------------------
 
 export const hasPrioritySpec = (priority: Priority): Specification<Task> =>
@@ -165,6 +191,15 @@ export interface TaskFilterCriteria {
   readonly dueFrom?: Date;
   readonly dueTo?: Date;
   readonly includeWithoutDueDate?: boolean;
+  /**
+   * Rango por fecha de COMPLETADO, que es distinto del de vencimiento.
+   *
+   * Hacen falta los dos y no se pueden fundir en uno: "lo que vencia esta semana" y "lo
+   * que termine esta semana" son preguntas diferentes, y una tarea que vencia el lunes y
+   * se cerro el viernes pertenece a semanas distintas segun cual se haga.
+   */
+  readonly completedFrom?: Date;
+  readonly completedTo?: Date;
   readonly now?: Date;
 }
 
@@ -206,6 +241,15 @@ export const buildTaskFilter = (criteria: TaskFilterCriteria): Specification<Tas
       criteria.dueTo ?? new Date(8_640_000_000_000_000),
     );
     parts.push(criteria.includeWithoutDueDate === true ? or(range, hasNoDueDateSpec()) : range);
+  }
+
+  if (criteria.completedFrom !== undefined || criteria.completedTo !== undefined) {
+    parts.push(
+      wasCompletedBetweenSpec(
+        criteria.completedFrom ?? new Date(0),
+        criteria.completedTo ?? new Date(8_640_000_000_000_000),
+      ),
+    );
   }
 
   return and(...parts);

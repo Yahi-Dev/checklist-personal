@@ -35,6 +35,9 @@ const CalendarPage = lazy(() =>
 const SearchPage = lazy(() =>
   import('../../pages/search-page').then((module) => ({ default: module.SearchPage })),
 );
+const CompletedPage = lazy(() =>
+  import('../../pages/completed-page').then((module) => ({ default: module.CompletedPage })),
+);
 const StatsPage = lazy(() =>
   import('../../pages/stats-page').then((module) => ({ default: module.StatsPage })),
 );
@@ -171,6 +174,7 @@ const router = createHashRouter([
       { path: 'calendario', element: withSuspense(<CalendarPage />) },
       { path: 'asistente', element: withSuspense(<AssistantPage />) },
       { path: 'buscar', element: withSuspense(<SearchPage />) },
+      { path: 'completadas', element: withSuspense(<CompletedPage />) },
       { path: 'enfoque', element: withSuspense(<FocusPage />) },
       { path: 'estadisticas', element: withSuspense(<StatsPage />) },
       { path: 'ajustes', element: withSuspense(<SettingsPage />) },
