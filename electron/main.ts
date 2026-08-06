@@ -115,10 +115,10 @@ async function createMainWindow(startHidden: boolean): Promise<void> {
     titleBarStyle: 'hidden',
     titleBarOverlay: {
       color: '#00000000',
-      symbolColor: '#6b7280',
+      symbolColor: '#8b9cc0',
       height: 44,
     },
-    backgroundColor: '#0b0f19',
+    backgroundColor: '#0d1526',
     show: false,
     autoHideMenuBar: true,
     icon: join(currentDir, '../build/icon.png'),

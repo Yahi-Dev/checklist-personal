@@ -236,7 +236,7 @@ const MessageBubble = ({
         <p
           className={cn(
             'max-w-[85%] animate-rise-in rounded-card rounded-br-sm px-4 py-2.5',
-            'bg-linear-to-b from-brand-500 to-brand-600 text-sm text-white shadow-soft',
+            'bg-brand-gradient text-sm text-white shadow-soft',
           )}
         >
           {message.text}

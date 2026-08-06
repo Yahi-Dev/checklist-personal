@@ -97,7 +97,7 @@ export const AppShell = () => {
         )}
       >
         <div className="drag-region flex items-center gap-2.5 px-5 pt-6 pb-4">
-          <div className="flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-soft">
+          <div className="bg-brand-gradient flex size-8 items-center justify-center rounded-xl text-white shadow-soft">
             <CheckSquare className="size-4.5" strokeWidth={2.5} />
           </div>
           <span className="text-sm font-semibold tracking-tight text-ink">Checklist</span>

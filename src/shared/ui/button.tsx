@@ -28,11 +28,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Degradado vertical sutil: da volumen sin parecer boton de 2010.
+        // El degradado de marca (celeste -> morado). Al pasar por encima se
+        // aclara y suelta el resplandor bicolor: la accion primaria responde
+        // ANTES del click, que es lo que hace sentir viva una interfaz.
         primary: cn(
-          'bg-linear-to-b from-brand-500 to-brand-600 text-white shadow-soft',
-          'hover:from-brand-600 hover:to-brand-700 hover:shadow-raised',
-          'active:from-brand-700 active:to-brand-700',
+          'bg-linear-to-br from-brand-500 to-accent-600 text-white shadow-soft',
+          'hover:from-brand-400 hover:to-accent-500 hover:shadow-lift',
+          'active:from-brand-600 active:to-accent-700 active:shadow-soft',
         ),
         secondary: 'border border-line bg-panel text-ink shadow-soft hover:bg-hover',
         ghost: 'text-ink-soft hover:bg-hover hover:text-ink',

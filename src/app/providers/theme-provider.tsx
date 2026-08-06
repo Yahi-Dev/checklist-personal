@@ -22,7 +22,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
       root.classList.toggle('dark', isDark);
 
       const meta = document.querySelector('meta[name="theme-color"]');
-      meta?.setAttribute('content', isDark ? '#181926' : '#f8f7fb');
+      meta?.setAttribute('content', isDark ? '#0d1526' : '#f4f8fc');
     };
 
     if (theme !== 'system') {

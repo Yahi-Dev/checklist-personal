@@ -69,7 +69,7 @@ export const Progress = ({ value, className, label, tone = 'brand' }: ProgressPr
           // El resorte hace que la barra "aterrice" al completar una subtarea en
           // vez de deslizarse sin caracter.
           'h-full rounded-full transition-[width] duration-500 ease-spring',
-          tone === 'success' ? 'bg-success' : 'bg-linear-to-r from-brand-400 to-brand-500',
+          tone === 'success' ? 'bg-success' : 'bg-linear-to-r from-brand-400 to-accent-500',
         )}
         style={{ width: `${percentage}%` }}
       />
@@ -150,7 +150,9 @@ export const RingProgress = ({
 
 export const Skeleton = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn('animate-pulse rounded-lg bg-sunken', className)}
+    // Barrido de luz en vez de parpadeo: un brillo que viaja dice "cargando",
+    // el parpadeo de opacidad se lee como "roto".
+    className={cn('animate-shimmer skeleton-shimmer rounded-lg bg-sunken', className)}
     aria-hidden="true"
     {...props}
   />
@@ -199,8 +201,8 @@ export const EmptyState = ({ icon, title, description, action, className }: Empt
       <div
         className={cn(
           'flex size-16 animate-float items-center justify-center rounded-3xl shadow-soft',
-          'bg-linear-to-br from-brand-100 to-brand-50 text-brand-500',
-          'dark:from-brand-900/40 dark:to-brand-800/20 dark:text-brand-300',
+          'bg-linear-to-br from-brand-100 to-accent-100 text-brand-500',
+          'dark:from-brand-900/40 dark:to-accent-900/25 dark:text-brand-300',
           '[&_svg]:size-7',
         )}
       >

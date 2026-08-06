@@ -18,7 +18,7 @@
     <meta name="description" content="Tus tareas del dia a dia, sincronizadas entre el telefono y la computadora." />
 
     <!-- Color de la barra de estado en la PWA. Lo actualiza ThemeProvider al cambiar el tema. -->
-    <meta name="theme-color" content="#f8f7fb" />
+    <meta name="theme-color" content="#f4f8fc" />
     <meta name="color-scheme" content="light dark" />
 
     <!-- iOS: sin esto la PWA abre en Safari con barra de direcciones en vez de a pantalla completa. -->
@@ -29,7 +29,7 @@
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
 
     <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg" />
-    <link rel="mask-icon" href="./icons/favicon.svg" color="#6366f1" />
+    <link rel="mask-icon" href="./icons/favicon.svg" color="#4a8ce8" />
 
     <!--
       Se aplica el tema ANTES de pintar nada.
@@ -50,7 +50,7 @@
             document.documentElement.classList.add('dark');
             document
               .querySelector('meta[name="theme-color"]')
-              .setAttribute('content', '#181926');
+              .setAttribute('content', '#0d1526');
           }
         } catch (error) {
           /* Preferencias corruptas o localStorage bloqueado: se queda en claro. */

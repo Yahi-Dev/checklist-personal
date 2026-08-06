@@ -86,8 +86,8 @@ export default defineConfig(({ mode }) => {
                 display: 'standalone',
                 display_override: ['window-controls-overlay', 'standalone'],
                 orientation: 'portrait-primary',
-                background_color: '#0b0f19',
-                theme_color: '#0b0f19',
+                background_color: '#0d1526',
+                theme_color: '#0d1526',
                 categories: ['productivity', 'utilities'],
                 icons: [
                   { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },

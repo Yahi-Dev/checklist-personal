@@ -9,17 +9,23 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ---------------------------------------------------------------------------
-   Tokens de diseño — direccion de arte "Soft Focus".
+   Tokens de diseño — direccion de arte "Cielo".
 
-   Un lienzo con un tinte lavanda casi imperceptible, un acento periwinkle suave
-   y semanticos pastel con el croma justo para leerse sin gritar. Todo en oklch
-   porque interpola de forma perceptual: las escalas no se ensucian a medio
-   camino como pasa con hsl, y subir o bajar luminosidad no vira el tono.
+   La idea entera en una frase: el modo claro es un cielo de dia y el oscuro es un
+   cielo de noche. No es una metafora decorativa sino la regla que decide cada
+   color: el lienzo claro es blanco con un tinte azul de mediodia, el oscuro es el
+   azul profundo de la noche -azul, no violeta ni negro-, el acento primario es el
+   celeste del cielo y el secundario el morado del anochecer. Los degradados
+   celeste -> morado son el crepusculo entre ambos, y por eso la marca es un
+   degradado y no un color: la app vive entre el dia y la noche.
+
+   Todo en oklch porque interpola de forma perceptual: las escalas no se ensucian
+   a medio camino como pasa con hsl, y subir o bajar luminosidad no vira el tono.
 
    En Tailwind v4 cada token de @theme genera su utilidad: `--radius-card` crea
-   `rounded-card`, `--color-priority-high` crea `bg-priority-high`, y cada
-   `--animate-*` crea su `animate-*`. Los componentes consumen esas utilidades,
-   nunca la sintaxis de variable arbitraria.
+   `rounded-card`, `--color-accent-600` crea `to-accent-600`, y cada `--animate-*`
+   crea su `animate-*`. Los componentes consumen esas utilidades, nunca la
+   sintaxis de variable arbitraria.
 --------------------------------------------------------------------------- */
 @theme {
   --font-sans:
@@ -27,19 +33,34 @@
     system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
 
-  /* Acento: periwinkle -> violeta suave (hue 282). */
-  --color-brand-50: oklch(0.973 0.012 282);
-  --color-brand-100: oklch(0.942 0.028 282);
-  --color-brand-200: oklch(0.894 0.055 282);
-  --color-brand-300: oklch(0.822 0.09 282);
-  --color-brand-400: oklch(0.732 0.128 282);
-  --color-brand-500: oklch(0.648 0.152 282);
-  --color-brand-600: oklch(0.57 0.168 282);
-  --color-brand-700: oklch(0.498 0.158 282);
-  --color-brand-800: oklch(0.42 0.128 282);
-  --color-brand-900: oklch(0.35 0.098 282);
+  /* Acento primario: celeste. El matiz se desliza de 237 a 252 al oscurecer,
+     porque el cielo real hace eso mismo: el azul claro es cian y el profundo es
+     indigo. Una escala de matiz fijo se ve de plastico al lado de esta. */
+  --color-brand-50: oklch(0.976 0.012 237);
+  --color-brand-100: oklch(0.945 0.032 237);
+  --color-brand-200: oklch(0.895 0.062 238);
+  --color-brand-300: oklch(0.828 0.098 239);
+  --color-brand-400: oklch(0.742 0.132 241);
+  --color-brand-500: oklch(0.655 0.152 244);
+  --color-brand-600: oklch(0.572 0.158 247);
+  --color-brand-700: oklch(0.497 0.148 250);
+  --color-brand-800: oklch(0.423 0.12 251);
+  --color-brand-900: oklch(0.353 0.092 252);
 
-  /* Semanticos pastel: presentes pero sin estridencia. */
+  /* Acento secundario: morado del anochecer. Es la otra punta del degradado de
+     marca y el color de lo "especial": el asistente, lo destacado, los remates. */
+  --color-accent-50: oklch(0.975 0.014 302);
+  --color-accent-100: oklch(0.944 0.034 302);
+  --color-accent-200: oklch(0.89 0.066 302);
+  --color-accent-300: oklch(0.818 0.105 301);
+  --color-accent-400: oklch(0.728 0.145 300);
+  --color-accent-500: oklch(0.645 0.172 300);
+  --color-accent-600: oklch(0.565 0.178 301);
+  --color-accent-700: oklch(0.492 0.163 303);
+  --color-accent-800: oklch(0.418 0.132 304);
+  --color-accent-900: oklch(0.35 0.1 305);
+
+  /* Semanticos: presentes pero sin estridencia, con el croma justo para leerse. */
   --color-success: oklch(0.68 0.13 158);
   --color-success-soft: oklch(0.945 0.045 158);
   --color-warning: oklch(0.77 0.125 76);
@@ -47,23 +68,28 @@
   --color-danger: oklch(0.645 0.165 22);
   --color-danger-soft: oklch(0.945 0.045 22);
 
-  /* Prioridades: coral, ambar y periwinkle apagado. */
+  /* Prioridades: coral, ambar y celeste apagado. La baja hereda el azul del
+     sistema en vez de un gris, para que "baja" no se lea como "apagada". */
   --color-priority-high: oklch(0.66 0.15 22);
   --color-priority-medium: oklch(0.78 0.12 78);
-  --color-priority-low: oklch(0.68 0.055 275);
+  --color-priority-low: oklch(0.69 0.085 240);
 
   /* Radios generosos: la redondez es la mitad de la suavidad. */
   --radius-card: 1rem;
   --radius-control: 0.75rem;
 
-  /* Sombras teñidas con el tono de marca: gris neutro sobre lienzo lavanda se ve sucio. */
-  --shadow-soft: 0 1px 2px oklch(0.35 0.06 282 / 0.05), 0 2px 8px -2px oklch(0.35 0.06 282 / 0.06);
+  /* Sombras teñidas de azul noche: gris neutro sobre lienzo azulado se ve sucio. */
+  --shadow-soft: 0 1px 2px oklch(0.3 0.05 255 / 0.05), 0 2px 8px -2px oklch(0.3 0.05 255 / 0.07);
   --shadow-raised:
-    0 2px 4px oklch(0.35 0.06 282 / 0.05), 0 10px 24px -8px oklch(0.35 0.06 282 / 0.13);
-  --shadow-overlay: 0 24px 48px -12px oklch(0.25 0.06 282 / 0.3);
-  /* Halo de foco para el campo de captura: borde + bloom del acento. */
+    0 2px 4px oklch(0.3 0.05 255 / 0.05), 0 10px 24px -8px oklch(0.3 0.05 255 / 0.14);
+  --shadow-overlay: 0 24px 48px -12px oklch(0.2 0.05 258 / 0.32);
+  /* Halo de foco para el campo de captura: borde + bloom celeste. */
   --shadow-glow:
-    0 0 0 1px oklch(0.648 0.152 282 / 0.28), 0 4px 24px -4px oklch(0.648 0.152 282 / 0.3);
+    0 0 0 1px oklch(0.655 0.152 244 / 0.3), 0 4px 24px -4px oklch(0.655 0.152 244 / 0.32);
+  /* Resplandor del crepusculo para las acciones primarias al pasar por encima:
+     celeste por un lado y morado por el otro, como el propio degradado. */
+  --shadow-lift:
+    0 2px 8px -2px oklch(0.655 0.152 244 / 0.28), 0 8px 24px -6px oklch(0.565 0.178 301 / 0.3);
 
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
   /* Rebote leve para micro-interacciones: 1.56 de sobreimpulso se siente vivo sin ser payaso. */
@@ -79,6 +105,7 @@
   --animate-page-in: page-in 0.3s var(--ease-out-quint);
   --animate-float: float 6s ease-in-out infinite;
   --animate-breathe: breathe 5s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.7s linear infinite;
 }
 
 /* ---------------------------------------------------------------------------
@@ -86,38 +113,43 @@
    utilidades via @theme inline. Invertir el tema entero es cambiar este bloque.
 --------------------------------------------------------------------------- */
 :root {
-  --surface-canvas: oklch(0.977 0.007 290);
-  --surface-panel: oklch(0.998 0.001 290);
+  /* Dia: blanco con el tinte azul mas leve que aun se percibe como "cielo". */
+  --surface-canvas: oklch(0.978 0.007 230);
+  --surface-panel: oklch(0.998 0.002 230);
   --surface-raised: oklch(1 0 0);
-  --surface-sunken: oklch(0.955 0.009 290);
-  --surface-hover: oklch(0.945 0.012 288);
+  --surface-sunken: oklch(0.955 0.011 231);
+  --surface-hover: oklch(0.944 0.015 233);
 
-  --text-primary: oklch(0.25 0.022 285);
-  --text-secondary: oklch(0.49 0.018 285);
-  --text-muted: oklch(0.62 0.014 285);
+  /* Tinta azul marino, no negra: sobre un lienzo frio, el negro puro parece un
+     agujero y el marino profundo se lee igual de bien sin romper la temperatura. */
+  --text-primary: oklch(0.245 0.032 256);
+  --text-secondary: oklch(0.485 0.026 251);
+  --text-muted: oklch(0.615 0.02 246);
 
-  --border-subtle: oklch(0.915 0.008 288);
-  --border-strong: oklch(0.845 0.012 288);
+  --border-subtle: oklch(0.913 0.013 235);
+  --border-strong: oklch(0.846 0.019 238);
 
   color-scheme: light;
 }
 
-/* La primera pasada visual salio casi negra: las tarjetas se fundian con el fondo.
-   Noche indigo, no negro: el lienzo sube a 0.175 y los paneles a 0.215 para que las
-   superficies se separen sin necesidad de bordes gruesos. */
+/* Noche: azul profundo de cielo nocturno (matiz 262), NO violeta ni negro. La
+   primera version de la app era casi negra y las tarjetas se fundian con el
+   fondo; el lienzo a 0.17 y los paneles a 0.21 separan las superficies sin
+   necesidad de bordes gruesos, y el matiz azul es lo que hace que se lea como
+   "noche" y no como "apagado". */
 .dark {
-  --surface-canvas: oklch(0.175 0.02 285);
-  --surface-panel: oklch(0.215 0.022 285);
-  --surface-raised: oklch(0.26 0.024 285);
-  --surface-sunken: oklch(0.15 0.018 285);
-  --surface-hover: oklch(0.285 0.026 285);
+  --surface-canvas: oklch(0.17 0.03 262);
+  --surface-panel: oklch(0.21 0.032 262);
+  --surface-raised: oklch(0.255 0.034 262);
+  --surface-sunken: oklch(0.142 0.026 262);
+  --surface-hover: oklch(0.28 0.036 262);
 
-  --text-primary: oklch(0.955 0.006 285);
-  --text-secondary: oklch(0.76 0.016 285);
-  --text-muted: oklch(0.6 0.016 285);
+  --text-primary: oklch(0.955 0.008 245);
+  --text-secondary: oklch(0.765 0.02 246);
+  --text-muted: oklch(0.605 0.022 248);
 
-  --border-subtle: oklch(0.32 0.022 285);
-  --border-strong: oklch(0.41 0.026 285);
+  --border-subtle: oklch(0.315 0.032 260);
+  --border-strong: oklch(0.405 0.036 258);
 
   color-scheme: dark;
 }
@@ -160,28 +192,64 @@
     overscroll-behavior-y: none;
   }
 
-  /* Aurora ambiental: tres manchas radiales del acento a opacidad minima, fijas
-     tras el contenido. Es lo que hace que el lienzo respire en vez de ser un
-     rectangulo plano. z-index -1 la pinta sobre el color del body pero bajo todo
-     lo demas; los contenedores de pagina son transparentes a proposito para que
-     se transparente. */
+  /* Aurora ambiental: tres manchas radiales fijas tras el contenido -celeste
+     arriba a la izquierda, morado arriba a la derecha y un rubor calido de
+     horizonte abajo-. Es lo que hace que el lienzo respire en vez de ser un
+     rectangulo plano, y DERIVA lentamente (60 s por ciclo): el movimiento es tan
+     lento que no se ve moverse, pero la pantalla nunca esta dos veces igual.
+     Se anima transform y no la posicion del gradiente para que corra entera en
+     el compositor, sin relayout. El margen negativo (-12%) da tela de sobra
+     para desplazarse sin ensenar los bordes. */
   body::before {
+    content: '';
+    position: fixed;
+    inset: -12%;
+    z-index: -2;
+    pointer-events: none;
+    background:
+      radial-gradient(42rem 32rem at 14% 2%, oklch(0.85 0.075 235 / 0.5), transparent 62%),
+      radial-gradient(34rem 28rem at 88% 0%, oklch(0.86 0.07 302 / 0.36), transparent 60%),
+      radial-gradient(40rem 30rem at 50% 108%, oklch(0.9 0.05 55 / 0.24), transparent 64%);
+    animation: aurora-drift 60s ease-in-out infinite alternate;
+  }
+
+  .dark body::before {
+    background:
+      radial-gradient(42rem 32rem at 14% 2%, oklch(0.44 0.11 250 / 0.38), transparent 62%),
+      radial-gradient(34rem 28rem at 88% 0%, oklch(0.42 0.11 300 / 0.3), transparent 60%),
+      radial-gradient(40rem 30rem at 50% 112%, oklch(0.38 0.09 275 / 0.22), transparent 64%);
+  }
+
+  /* Las estrellas del modo oscuro. Dos capas de puntos diminutos a opacidad
+     minima, mas densas arriba y desvanecidas hacia el "horizonte" por la
+     mascara, con una respiracion de 9 s. El tamaño de celda es primo entre
+     capas (11/17 rem) para que el patron no se note repetido. En el modo claro
+     esta capa no existe: de dia no hay estrellas. */
+  body::after {
     content: '';
     position: fixed;
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background:
-      radial-gradient(40rem 30rem at 12% -8%, oklch(0.85 0.075 288 / 0.42), transparent 62%),
-      radial-gradient(32rem 26rem at 90% -6%, oklch(0.88 0.06 210 / 0.3), transparent 60%),
-      radial-gradient(38rem 30rem at 50% 115%, oklch(0.89 0.05 340 / 0.22), transparent 64%);
+    opacity: 0;
   }
 
-  .dark body::before {
-    background:
-      radial-gradient(40rem 30rem at 12% -8%, oklch(0.45 0.11 288 / 0.34), transparent 62%),
-      radial-gradient(32rem 26rem at 90% -6%, oklch(0.42 0.09 220 / 0.24), transparent 60%),
-      radial-gradient(38rem 30rem at 50% 118%, oklch(0.4 0.09 330 / 0.18), transparent 64%);
+  .dark body::after {
+    opacity: 1;
+    background-image:
+      radial-gradient(1px 1px at 22% 31%, oklch(0.9 0.02 245 / 0.5) 50%, transparent 51%),
+      radial-gradient(1px 1px at 71% 12%, oklch(0.9 0.02 245 / 0.38) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 48% 58%, oklch(0.92 0.03 250 / 0.42) 50%, transparent 51%),
+      radial-gradient(1px 1px at 87% 79%, oklch(0.9 0.02 245 / 0.3) 50%, transparent 51%),
+      radial-gradient(1px 1px at 9% 82%, oklch(0.9 0.02 245 / 0.34) 50%, transparent 51%);
+    background-size:
+      11rem 11rem,
+      17rem 17rem,
+      23rem 23rem,
+      13rem 13rem,
+      19rem 19rem;
+    mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 85%);
+    animation: twinkle 9s ease-in-out infinite alternate;
   }
 
   /* Anillo de foco visible solo con teclado: no molesta al tocar en el telefono
@@ -223,7 +291,9 @@
     }
   }
 
-  /* Respetar a quien pidio menos animacion en el sistema. */
+  /* Respetar a quien pidio menos animacion en el sistema. Apaga tambien la
+     aurora y las estrellas: quedan como fondo fijo, que es exactamente lo que
+     esa preferencia pide. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -240,6 +310,26 @@
    Utilidades propias
 --------------------------------------------------------------------------- */
 @layer utilities {
+  /* El degradado de marca: celeste -> morado, el crepusculo de la direccion de
+     arte. Existe como utilidad para que el boton primario, el logo, la burbuja
+     del chat y cualquier remate usen EXACTAMENTE el mismo, en el mismo angulo.
+     Tres pinceladas parecidas a ojo son peores que una repetida. */
+  .bg-brand-gradient {
+    background-image: linear-gradient(135deg, var(--color-brand-500), var(--color-accent-600));
+  }
+  .bg-brand-gradient-soft {
+    background-image: linear-gradient(135deg, var(--color-brand-100), var(--color-accent-100));
+  }
+
+  /* Texto con el degradado de marca. Para UNA palabra clave por pantalla como
+     mucho: usado en parrafos se vuelve ilegible y de feria. */
+  .text-brand-gradient {
+    background-image: linear-gradient(120deg, var(--color-brand-500), var(--color-accent-500));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
   /* Zonas seguras del iPhone: la barra inferior no puede quedar bajo el indicador
      de inicio, ni la cabecera bajo el notch. */
   .pt-safe {
@@ -285,6 +375,27 @@
     background-repeat: no-repeat;
     background-size: 100% 1px;
     animation: strike 0.3s var(--ease-out-quint) forwards;
+  }
+
+  /* Barrido de luz para los esqueletos de carga. Un brillo que viaja dice "esto
+     esta llegando"; el parpadeo de opacidad de antes decia "esto esta roto". */
+  .skeleton-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      transparent 36%,
+      oklch(1 0 0 / 0.6) 50%,
+      transparent 64%
+    );
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+  }
+  .dark .skeleton-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      transparent 36%,
+      oklch(1 0 0 / 0.07) 50%,
+      transparent 64%
+    );
   }
 }
 
@@ -382,5 +493,39 @@
   }
   50% {
     transform: scale(1.012);
+  }
+}
+
+/* La deriva de la aurora: un paseo diagonal minimo con un respiro de escala.
+   Sesenta segundos por trayecto y alternado, asi nunca hay un salto de vuelta. */
+@keyframes aurora-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2.5%, 1.5%, 0) scale(1.04);
+  }
+  to {
+    transform: translate3d(-2%, 2.5%, 0) scale(1.02);
+  }
+}
+
+/* Las estrellas respiran entre dos opacidades. Nunca a cero: un cielo que se
+   apaga entero llama la atencion, que es justo lo contrario de su trabajo. */
+@keyframes twinkle {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
   }
 }
