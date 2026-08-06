@@ -192,7 +192,15 @@ export const StatsPage = () => {
                   content={<ChartTooltipCard />}
                   cursor={{ fill: 'var(--surface-hover)' }}
                 />
-                <Bar dataKey="completadas" fill="var(--color-brand-500)" radius={[3, 3, 0, 0]} />
+                {/* Degradado vertical celeste -> morado en las barras: el mismo
+                    crepusculo de la marca, para que la grafica sea de ESTA app. */}
+                <defs>
+                  <linearGradient id="barra-actividad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-brand-400)" />
+                    <stop offset="100%" stopColor="var(--color-accent-500)" />
+                  </linearGradient>
+                </defs>
+                <Bar dataKey="completadas" fill="url(#barra-actividad)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

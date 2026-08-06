@@ -113,7 +113,12 @@ export const AppShell = () => {
                   'relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
                   'transition-colors duration-200',
                   isActive
-                    ? 'bg-brand-600/10 text-brand-700 dark:bg-brand-400/10 dark:text-brand-300'
+                    ? cn(
+                        // Tinte crepuscular, no plano: celeste que muere en morado,
+                        // como todos los remates de marca de la app.
+                        'bg-linear-to-r from-brand-600/12 to-accent-600/8 text-brand-700',
+                        'dark:from-brand-400/12 dark:to-accent-400/8 dark:text-brand-300',
+                      )
                     : 'text-ink-soft hover:bg-hover hover:text-ink',
                 )
               }
@@ -182,7 +187,7 @@ export const AppShell = () => {
               }}
               aria-hidden="true"
             >
-              <span className="absolute inset-x-2 inset-y-1.5 rounded-2xl bg-brand-600/10 dark:bg-brand-400/15" />
+              <span className="absolute inset-x-2 inset-y-1.5 rounded-2xl bg-linear-to-r from-brand-600/12 to-accent-600/10 dark:from-brand-400/15 dark:to-accent-400/12" />
             </span>
           )}
 

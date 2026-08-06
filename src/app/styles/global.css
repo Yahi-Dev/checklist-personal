@@ -203,53 +203,87 @@
   body::before {
     content: '';
     position: fixed;
-    inset: -12%;
+    inset: -14%;
     z-index: -2;
     pointer-events: none;
     background:
-      radial-gradient(42rem 32rem at 14% 2%, oklch(0.85 0.075 235 / 0.5), transparent 62%),
-      radial-gradient(34rem 28rem at 88% 0%, oklch(0.86 0.07 302 / 0.36), transparent 60%),
-      radial-gradient(40rem 30rem at 50% 108%, oklch(0.9 0.05 55 / 0.24), transparent 64%);
-    animation: aurora-drift 60s ease-in-out infinite alternate;
+      radial-gradient(46rem 34rem at 14% 0%, oklch(0.83 0.09 235 / 0.65), transparent 64%),
+      radial-gradient(38rem 30rem at 88% -2%, oklch(0.85 0.085 302 / 0.5), transparent 62%),
+      radial-gradient(30rem 24rem at 55% 30%, oklch(0.88 0.06 250 / 0.3), transparent 60%),
+      radial-gradient(44rem 32rem at 50% 106%, oklch(0.9 0.06 55 / 0.34), transparent 66%);
+    animation: aurora-drift 38s ease-in-out infinite alternate;
   }
 
   .dark body::before {
     background:
-      radial-gradient(42rem 32rem at 14% 2%, oklch(0.44 0.11 250 / 0.38), transparent 62%),
-      radial-gradient(34rem 28rem at 88% 0%, oklch(0.42 0.11 300 / 0.3), transparent 60%),
-      radial-gradient(40rem 30rem at 50% 112%, oklch(0.38 0.09 275 / 0.22), transparent 64%);
+      radial-gradient(46rem 34rem at 14% 0%, oklch(0.42 0.12 250 / 0.55), transparent 64%),
+      radial-gradient(38rem 30rem at 88% -2%, oklch(0.4 0.12 300 / 0.45), transparent 62%),
+      radial-gradient(30rem 24rem at 55% 30%, oklch(0.34 0.08 265 / 0.35), transparent 60%),
+      radial-gradient(44rem 32rem at 50% 110%, oklch(0.36 0.1 280 / 0.3), transparent 66%);
   }
 
-  /* Las estrellas del modo oscuro. Dos capas de puntos diminutos a opacidad
-     minima, mas densas arriba y desvanecidas hacia el "horizonte" por la
-     mascara, con una respiracion de 9 s. El tamaño de celda es primo entre
-     capas (11/17 rem) para que el patron no se note repetido. En el modo claro
-     esta capa no existe: de dia no hay estrellas. */
+  /* La segunda capa del cielo cambia de naturaleza con el tema: de dia son
+     NUBES -tres manchas blancas muy difusas que cruzan la pantalla entera en
+     dos minutos- y de noche son ESTRELLAS. Mismo elemento, dos climas. */
   body::after {
     content: '';
     position: fixed;
-    inset: 0;
+    inset: -6% -30%;
     z-index: -1;
     pointer-events: none;
-    opacity: 0;
+    background:
+      radial-gradient(30rem 9rem at 22% 16%, oklch(1 0 0 / 0.5), transparent 68%),
+      radial-gradient(24rem 7rem at 65% 7%, oklch(1 0 0 / 0.38), transparent 66%),
+      radial-gradient(34rem 10rem at 110% 28%, oklch(1 0 0 / 0.42), transparent 70%);
+    animation: clouds-drift 120s linear infinite;
   }
 
+  /* Las estrellas de la noche. Puntos diminutos en celdas de tamaño primo entre
+     si (7/11/13/17/19/23 rem) para que el patron no se note repetido, mas densos
+     arriba y desvanecidos hacia el "horizonte" por la mascara, con una
+     respiracion de 7 s. Las nubes del dia se apagan aqui: de noche no se ven. */
   .dark body::after {
-    opacity: 1;
+    inset: 0;
     background-image:
-      radial-gradient(1px 1px at 22% 31%, oklch(0.9 0.02 245 / 0.5) 50%, transparent 51%),
-      radial-gradient(1px 1px at 71% 12%, oklch(0.9 0.02 245 / 0.38) 50%, transparent 51%),
-      radial-gradient(1.5px 1.5px at 48% 58%, oklch(0.92 0.03 250 / 0.42) 50%, transparent 51%),
-      radial-gradient(1px 1px at 87% 79%, oklch(0.9 0.02 245 / 0.3) 50%, transparent 51%),
-      radial-gradient(1px 1px at 9% 82%, oklch(0.9 0.02 245 / 0.34) 50%, transparent 51%);
+      radial-gradient(1px 1px at 22% 31%, oklch(0.92 0.02 245 / 0.7) 50%, transparent 51%),
+      radial-gradient(1px 1px at 71% 12%, oklch(0.92 0.02 245 / 0.55) 50%, transparent 51%),
+      radial-gradient(1.6px 1.6px at 48% 58%, oklch(0.95 0.03 250 / 0.6) 50%, transparent 51%),
+      radial-gradient(1px 1px at 87% 79%, oklch(0.92 0.02 245 / 0.45) 50%, transparent 51%),
+      radial-gradient(1.4px 1.4px at 9% 82%, oklch(0.93 0.02 245 / 0.5) 50%, transparent 51%),
+      radial-gradient(1px 1px at 38% 9%, oklch(0.92 0.02 245 / 0.6) 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 60% 38%, oklch(0.94 0.025 248 / 0.5) 50%, transparent 51%);
     background-size:
       11rem 11rem,
       17rem 17rem,
       23rem 23rem,
       13rem 13rem,
-      19rem 19rem;
-    mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 85%);
-    animation: twinkle 9s ease-in-out infinite alternate;
+      19rem 19rem,
+      7rem 7rem,
+      29rem 29rem;
+    mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 88%);
+    animation: twinkle 7s ease-in-out infinite alternate;
+  }
+
+  /* La estrella fugaz. Un trazo fino que cruza la esquina superior derecha
+     durante un segundo y descansa DIECISIETE: lo raro es lo que la hace
+     especial, una cada pocos segundos seria un mosquito. Solo de noche. */
+  html::before {
+    content: '';
+    position: fixed;
+    top: 12%;
+    left: 68%;
+    z-index: -1;
+    width: 7rem;
+    height: 1.5px;
+    border-radius: 999px;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(90deg, transparent, oklch(0.95 0.02 245 / 0.9), transparent);
+    transform: rotate(-28deg);
+  }
+
+  .dark html::before {
+    animation: shooting-star 18s linear infinite 4s;
   }
 
   /* Anillo de foco visible solo con teclado: no molesta al tocar en el telefono
@@ -309,27 +343,31 @@
 /* ---------------------------------------------------------------------------
    Utilidades propias
 --------------------------------------------------------------------------- */
+/* El degradado de marca: celeste -> morado, el crepusculo de la direccion de
+   arte. Existe como utilidad para que el boton primario, el logo, la burbuja
+   del chat y cualquier remate usen EXACTAMENTE el mismo, en el mismo angulo.
+   Tres pinceladas parecidas a ojo son peores que una repetida.
+
+   `@utility` y no una clase suelta: asi acepta variantes, y el checkbox puede
+   pedir `data-[state=checked]:bg-brand-gradient`. */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(135deg, var(--color-brand-500), var(--color-accent-600));
+}
+
+@utility bg-brand-gradient-soft {
+  background-image: linear-gradient(135deg, var(--color-brand-100), var(--color-accent-100));
+}
+
+/* Texto con el degradado de marca. Para UNA palabra clave por pantalla como
+   mucho: usado en parrafos se vuelve ilegible y de feria. */
+@utility text-brand-gradient {
+  background-image: linear-gradient(120deg, var(--color-brand-500), var(--color-accent-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 @layer utilities {
-  /* El degradado de marca: celeste -> morado, el crepusculo de la direccion de
-     arte. Existe como utilidad para que el boton primario, el logo, la burbuja
-     del chat y cualquier remate usen EXACTAMENTE el mismo, en el mismo angulo.
-     Tres pinceladas parecidas a ojo son peores que una repetida. */
-  .bg-brand-gradient {
-    background-image: linear-gradient(135deg, var(--color-brand-500), var(--color-accent-600));
-  }
-  .bg-brand-gradient-soft {
-    background-image: linear-gradient(135deg, var(--color-brand-100), var(--color-accent-100));
-  }
-
-  /* Texto con el degradado de marca. Para UNA palabra clave por pantalla como
-     mucho: usado en parrafos se vuelve ilegible y de feria. */
-  .text-brand-gradient {
-    background-image: linear-gradient(120deg, var(--color-brand-500), var(--color-accent-500));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
   /* Zonas seguras del iPhone: la barra inferior no puede quedar bajo el indicador
      de inicio, ni la cabecera bajo el notch. */
   .pt-safe {
@@ -496,17 +534,49 @@
   }
 }
 
-/* La deriva de la aurora: un paseo diagonal minimo con un respiro de escala.
-   Sesenta segundos por trayecto y alternado, asi nunca hay un salto de vuelta. */
+/* La deriva de la aurora: un paseo diagonal con un respiro de escala, alternado
+   para que nunca haya un salto de vuelta. Lo bastante amplio para notarse si uno
+   se queda mirando, lo bastante lento para no distraer si no. */
 @keyframes aurora-drift {
   from {
     transform: translate3d(0, 0, 0) scale(1);
   }
   50% {
-    transform: translate3d(2.5%, 1.5%, 0) scale(1.04);
+    transform: translate3d(4%, 2.5%, 0) scale(1.07);
   }
   to {
-    transform: translate3d(-2%, 2.5%, 0) scale(1.02);
+    transform: translate3d(-3.5%, 4%, 0) scale(1.03);
+  }
+}
+
+/* Las nubes cruzan la pantalla entera de izquierda a derecha. El elemento nace
+   ensanchado un 30% por cada lado, asi el trayecto no enseña nunca un borde. */
+@keyframes clouds-drift {
+  from {
+    transform: translate3d(-14%, 0, 0);
+  }
+  to {
+    transform: translate3d(14%, 0, 0);
+  }
+}
+
+/* La estrella fugaz: un segundo de vuelo en un ciclo de dieciocho. El resto del
+   tiempo no existe. El trazo se estira al entrar y se apaga antes de frenar. */
+@keyframes shooting-star {
+  0% {
+    opacity: 0;
+    transform: rotate(-28deg) translateX(0);
+  }
+  1.5% {
+    opacity: 0.9;
+  }
+  5% {
+    opacity: 0;
+    transform: rotate(-28deg) translateX(-16rem);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-28deg) translateX(-16rem);
   }
 }
 

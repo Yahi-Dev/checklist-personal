@@ -146,7 +146,7 @@ export const CalendarPage = () => {
                     'transition-colors focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:outline-none',
                     view === 'week' && 'aspect-auto min-h-20',
                     !isCurrentMonth && 'opacity-35',
-                    isSelected ? 'bg-brand-600 text-white' : 'hover:bg-hover',
+                    isSelected ? 'bg-brand-gradient text-white shadow-soft' : 'hover:bg-hover',
                   )}
                   aria-label={`${day.getDate()}, ${pending.length} pendientes`}
                   aria-pressed={isSelected}

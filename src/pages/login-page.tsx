@@ -76,7 +76,7 @@ export const LoginPage = () => {
     <div className="pb-safe pt-safe flex min-h-dvh items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-raised">
+          <div className="bg-brand-gradient flex size-14 items-center justify-center rounded-2xl text-white shadow-raised">
             <CheckSquare className="size-7" strokeWidth={2.5} />
           </div>
           <div>

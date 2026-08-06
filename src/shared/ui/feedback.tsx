@@ -111,7 +111,7 @@ export const RingProgress = ({
               variables del tema, asi que siguen al modo claro/oscuro solos. */}
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style={{ stopColor: 'var(--color-brand-400)' }} />
-            <stop offset="100%" style={{ stopColor: 'var(--color-brand-600)' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--color-accent-500)' }} />
           </linearGradient>
         </defs>
 

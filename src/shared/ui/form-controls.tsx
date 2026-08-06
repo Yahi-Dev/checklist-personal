@@ -156,7 +156,7 @@ export const Checkbox = forwardRef<
       'transition-colors duration-150',
       'focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:outline-none',
       'disabled:cursor-not-allowed disabled:opacity-50',
-      'data-[state=checked]:border-brand-600 data-[state=checked]:bg-brand-600',
+      'data-[state=checked]:border-brand-600 data-[state=checked]:bg-brand-gradient',
       // El pop al marcar es LA micro-interaccion de una app de tareas: completar
       // algo tiene que sentirse como un pequeño premio, no como un cambio de estado.
       'data-[state=checked]:animate-pop data-[state=checked]:text-white',
@@ -186,7 +186,7 @@ export const Switch = forwardRef<
       'border-2 border-transparent transition-colors duration-200',
       'focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:outline-none',
       'disabled:cursor-not-allowed disabled:opacity-50',
-      'data-[state=checked]:bg-brand-600 data-[state=unchecked]:bg-line-strong',
+      'data-[state=checked]:bg-brand-gradient data-[state=unchecked]:bg-line-strong',
       className,
     )}
     {...props}
