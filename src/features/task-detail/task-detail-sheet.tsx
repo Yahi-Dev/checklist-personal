@@ -47,6 +47,7 @@ import { subtaskProgress } from '../../domain/task/subtask';
 import { Progress } from '../../shared/ui/feedback';
 import { useCategories, useTags } from '../../shared/hooks/use-live-query';
 import { usePreferences } from '../../shared/stores/preferences-store';
+import { celebrate, celebrationKindFor, centerOf } from '../celebration/celebration';
 import { useTaskActions } from '../task-actions/use-task-actions';
 
 /**
@@ -94,6 +95,7 @@ interface TaskDetailContentProps {
 
 const TaskDetailContent = ({ task, onOpenChange }: TaskDetailContentProps) => {
   const actions = useTaskActions();
+  const completeCheckboxRef = useRef<HTMLButtonElement>(null);
   const categories = useCategories() ?? [];
   const tags = useTags() ?? [];
   const defaultReminderLead = usePreferences((state) => state.defaultReminderLeadMinutes);
@@ -238,10 +240,20 @@ const TaskDetailContent = ({ task, onOpenChange }: TaskDetailContentProps) => {
           {/* ---------------- Titulo y destacado ---------------- */}
           <div className="flex items-start gap-2">
             <Checkbox
+              ref={completeCheckboxRef}
               checked={task.status === 'completed'}
               onCheckedChange={() => {
-                if (task.status === 'completed') void actions.uncomplete(task.id);
-                else void actions.complete(task);
+                if (task.status === 'completed') {
+                  void actions.uncomplete(task.id);
+                  return;
+                }
+                // La misma fiesta que en la lista: el premio no depende de desde
+                // donde se complete.
+                celebrate({
+                  kind: celebrationKindFor(task, Date.now()),
+                  ...centerOf(completeCheckboxRef.current),
+                });
+                void actions.complete(task);
               }}
               className="mt-2"
               aria-label="Completar tarea"

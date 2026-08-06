@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 
 import { AdvisorChatProvider } from './advisor-chat-provider';
 import { AuthProvider } from './auth-provider';
+import { CelebrationLayer } from '../../features/celebration/celebration-layer';
 import { SyncProvider } from './sync-provider';
 import { ThemeProvider } from './theme-provider';
 import { usePreferences } from '../../shared/stores/preferences-store';
@@ -50,6 +51,9 @@ export const AppProviders = ({ children }: { children: ReactNode }) => {
               <AdvisorChatProvider>
                 {children}
                 <AppToaster />
+                {/* La capa de celebraciones cubre toda la app: el estallido tiene
+                    que poder pintarse sobre cualquier pantalla y cualquier hoja. */}
+                <CelebrationLayer />
               </AdvisorChatProvider>
             </SyncProvider>
           </AuthProvider>

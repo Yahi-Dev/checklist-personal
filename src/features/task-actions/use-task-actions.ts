@@ -35,6 +35,7 @@ import {
   UncompleteTaskUseCase,
   UpdateTaskUseCase,
 } from '../../application/use-cases/task/task-commands';
+import { celebrationKindFor, type CelebrationKind } from '../celebration/celebration';
 import { formatDueDate } from '../../shared/lib/date-format';
 import { getContainer } from '../../infrastructure/di/container';
 import { isErr } from '../../domain/shared/result';
@@ -56,6 +57,24 @@ import { QuickCaptureTaskUseCase } from '../../application/use-cases/task/quick-
 
 const showError = (error: DomainError): void => {
   toast.error(error.message);
+};
+
+/**
+ * Titulos del aviso de completado. VARIOS por clima y elegidos al azar: el mismo
+ * "Hecho" quinientas veces deja de leerse; la variacion pequeña es lo que mantiene
+ * vivo un premio que se recibe muchas veces al dia.
+ *
+ * Los de "tarde" son positivos A PROPOSITO. Cerrar una tarea vencida es saldar una
+ * deuda; recibir un reproche en ese momento enseñaria a no cerrarlas.
+ */
+const COMPLETION_TITLES: Record<CelebrationKind, readonly string[]> = {
+  brillante: ['¡Buen trabajo!', '¡Excelente!', '¡Una menos!', '¡Asi se hace!'],
+  amanecer: ['Tarde, pero hecha: eso cuenta', 'Cerrada al fin, bien ahi', 'Mejor tarde que nunca'],
+};
+
+const pickCompletionTitle = (kind: CelebrationKind): string => {
+  const pool = COMPLETION_TITLES[kind];
+  return pool[Math.floor(Math.random() * pool.length)] ?? 'Hecho';
 };
 
 export interface TaskActions {
@@ -172,6 +191,10 @@ export const useTaskActions = (): TaskActions => {
 
   const complete = useCallback(
     async (task: Task) => {
+      // El clima se decide ANTES de escribir: tras completarse, la tarea ya no
+      // esta vencida y la pregunta "¿llegaste tarde?" no tendria respuesta.
+      const kind = celebrationKindFor(task, Date.now());
+
       const result = await useCases.complete.execute({ taskId: task.id });
 
       if (isErr(result)) {
@@ -182,7 +205,7 @@ export const useTaskActions = (): TaskActions => {
       const { next } = result.value;
       const nextDueAt = next?.dueAt ?? null;
 
-      toast.success('Hecho', {
+      toast.success(pickCompletionTitle(kind), {
         description:
           next === null || nextDueAt === null
             ? task.title

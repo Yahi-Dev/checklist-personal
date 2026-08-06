@@ -11,7 +11,7 @@ import {
   Timer,
   Trash2,
 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 
 import type { Category } from '../../domain/category/category';
 import type { SnoozePreset } from '../../application/use-cases/task/task-commands';
@@ -34,6 +34,7 @@ import {
 import { Progress } from '../../shared/ui/feedback';
 import { SNOOZE_PRESET_LABEL } from '../../application/use-cases/task/task-commands';
 import { subtaskProgress } from '../../domain/task/subtask';
+import { celebrate, celebrationKindFor, centerOf } from '../celebration/celebration';
 import { useTaskActions } from '../task-actions/use-task-actions';
 
 /**
@@ -103,6 +104,7 @@ export const TaskItem = memo(
   }: TaskItemProps) => {
     const actions = useTaskActions();
     const [isCompleting, setIsCompleting] = useState(false);
+    const checkboxRef = useRef<HTMLButtonElement>(null);
 
     const isCompleted = task.status === 'completed';
     const isOverdue =
@@ -115,6 +117,13 @@ export const TaskItem = memo(
         await actions.uncomplete(task.id);
         return;
       }
+
+      // La fiesta sale ANTES que la escritura y desde el checkbox exacto: el
+      // premio tiene que ser instantaneo y nacer donde estaba el dedo.
+      celebrate({
+        kind: celebrationKindFor(task, Date.now()),
+        ...centerOf(checkboxRef.current),
+      });
 
       setIsCompleting(true);
       // La escritura se lanza tras la animacion; el estado local ya da el feedback.
@@ -149,6 +158,7 @@ export const TaskItem = memo(
         />
 
         <Checkbox
+          ref={checkboxRef}
           checked={isCompleted || isCompleting}
           onCheckedChange={() => void handleToggle()}
           className="mt-0.5 shrink-0"
