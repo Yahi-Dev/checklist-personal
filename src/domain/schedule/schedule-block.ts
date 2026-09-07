@@ -199,9 +199,15 @@ export const softDeleteScheduleBlock = (block: ScheduleBlock, now: IsoDateTime):
  * queda fuera a proposito, para que cambiar de aula entre importaciones se lea como una
  * ACTUALIZACION del mismo bloque y no como borrar uno y crear otro.
  */
+export const scheduleBlockKeyFor = (
+  subjectId: SubjectId,
+  weekday: Weekday,
+  startsAt: TimeOfDay,
+): string => `${subjectId}|${String(weekday)}|${startsAt}`;
+
 export const scheduleBlockNaturalKey = (
   block: Pick<ScheduleBlock, 'subjectId' | 'weekday' | 'startsAt'>,
-): string => `${block.subjectId}|${String(block.weekday)}|${block.startsAt}`;
+): string => scheduleBlockKeyFor(block.subjectId, block.weekday, block.startsAt);
 
 export const blockDurationMinutes = (block: ScheduleBlock): number =>
   timeToMinutes(block.endsAt) - timeToMinutes(block.startsAt);

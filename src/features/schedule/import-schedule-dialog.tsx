@@ -1,4 +1,5 @@
 import { AlertTriangle, FileUp, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useCallback, useRef, useState } from 'react';
 
 import type { DragEvent } from 'react';
@@ -58,7 +59,19 @@ export const ImportScheduleDialog = ({
     async (file: File) => {
       setStage({ kind: 'reading' });
 
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      /* Leer los bytes puede fallar por cosas que no dependen de nosotros: el archivo se
+         movio, es una carpeta, el navegador niega el permiso. Sin este `catch` la promesa
+         quedaba rechazada sin dueño y el dialogo se quedaba en "Leyendo..." para siempre,
+         sin decir nada y sin forma de reintentar. */
+      let bytes: Uint8Array;
+      try {
+        bytes = new Uint8Array(await file.arrayBuffer());
+      } catch {
+        toast.error('No se pudo leer el archivo. Vuelve a elegirlo.');
+        setStage({ kind: 'idle' });
+        return;
+      }
+
       const summary = await actions.previewImport(bytes);
 
       if (summary === null) {

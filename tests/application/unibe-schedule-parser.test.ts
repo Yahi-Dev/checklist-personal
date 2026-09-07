@@ -244,6 +244,38 @@ describe('parser del horario de UNIBE', () => {
     expect(parsed.warnings.join(' ')).toMatch(/Lunes/u);
   });
 
+  it('sigue leyendo aunque falte la columna de un dia', () => {
+    // Un cuatrimestre sin clases en sabado podria no imprimir esa columna. Antes se
+    // exigian los seis dias y la ausencia de uno dejaba el documento entero sin leer.
+    const sinSabado = HORARIO_2027_1.filter((item) => !(item.text === 'Sábado' && item.y > 590));
+
+    const parsed = parseUnibeSchedule(sinSabado);
+
+    expect(parsed.subjects).toHaveLength(6);
+    expect(parsed.termCode).toBe('2027-1');
+    // La unica clase del sabado se pierde con su columna; el resto sigue entero.
+    const total = parsed.subjects.reduce((count, subject) => count + subject.blocks.length, 0);
+    expect(total).toBe(7);
+  });
+
+  it('no confunde un nombre de asignatura con la cabecera de dias', () => {
+    // Si una asignatura se llamara "Taller de los Sabados", su palabra prestaria la
+    // posicion a la columna del sabado y media tabla acabaria en el dia equivocado.
+    // La cabecera se mide exigiendo que los rotulos compartan LINEA BASE.
+    const conTrampa: readonly PdfTextItem[] = [
+      ...HORARIO_2027_1,
+      { text: 'Sábado', page: 1, x: 50.4, y: 300.0, width: 27.9, height: 6.3 },
+      { text: 'Lunes', page: 1, x: 50.4, y: 250.0, width: 22.1, height: 6.3 },
+    ];
+
+    const conTrampaParsed = parseUnibeSchedule(conTrampa);
+    const limpio = parseUnibeSchedule(HORARIO_2027_1);
+
+    expect(conTrampaParsed.subjects.map((s) => s.blocks.map((b) => b.weekday))).toEqual(
+      limpio.subjects.map((s) => s.blocks.map((b) => b.weekday)),
+    );
+  });
+
   it('no se traga la cabecera de la pagina como si fuera una clase', () => {
     // "HORARIO DE ESTUDIANTES" y "Semestre: 2027-1" caen justo en la banda de x de una
     // columna de dia. Sin el techo por encima de la primera asignatura, entrarian.

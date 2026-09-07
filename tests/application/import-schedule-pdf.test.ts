@@ -201,6 +201,42 @@ describe('ImportSchedulePdfUseCase', () => {
     expect(orden).toEqual(['asignaturas', 'clases']);
   });
 
+  it('una asignatura invalida no tumba la importacion entera', async () => {
+    // Misma regla que el parser: lo que no se puede guardar se anota y se sigue. Antes,
+    // un solo nombre demasiado largo devolvia error y no se escribia ni una fila.
+    const nombreImposible = 'X'.repeat(200);
+    harness.pdf.setItems(
+      HORARIO_2027_1.map((item) =>
+        item.text === 'CÁLCULO VECTORIAL' ? { ...item, text: nombreImposible } : item,
+      ),
+    );
+
+    const summary = unwrap(await importar());
+
+    expect(summary.createdSubjects).toBe(5);
+    expect(summary.warnings.join(' ')).toMatch(/EGC252/u);
+    expect(harness.subjects.items.size).toBe(5);
+  });
+
+  it('la asignatura que fallo no se da de baja al reimportar', async () => {
+    // Se marca vista antes de intentar guardarla: un tropiezo leyendo el documento no
+    // puede llevarse por delante la fila que ya estaba bien guardada.
+    await importar();
+    expect(harness.subjects.items.size).toBe(6);
+
+    harness.pdf.setItems(
+      HORARIO_2027_1.map((item) =>
+        item.text === 'CÁLCULO VECTORIAL' ? { ...item, text: 'X'.repeat(200) } : item,
+      ),
+    );
+
+    const summary = unwrap(await importar());
+
+    expect(summary.removedSubjects).toBe(0);
+    const calculo = [...harness.subjects.items.values()].find((item) => item.code === 'EGC252');
+    expect(calculo?.deletedAt).toBeNull();
+  });
+
   it('le pasa al extractor los bytes tal cual', async () => {
     await importar(new Uint8Array([37, 80, 68, 70]));
 

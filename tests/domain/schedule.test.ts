@@ -27,6 +27,7 @@ import {
   createSubject,
   isTermActive,
   softDeleteSubject,
+  subjectKeyFor,
   subjectNaturalKey,
   updateSubject,
 } from '../../src/domain/schedule/subject';
@@ -194,6 +195,17 @@ describe('crear una asignatura', () => {
 
     expect(subjectNaturalKey(teoria)).not.toBe(subjectNaturalKey(laboratorio));
     expect(subjectNaturalKey(teoria)).toBe('2027-1|EGC270|01');
+  });
+
+  it('normaliza las tres partes de la clave natural', () => {
+    // Quien importa compara la clave de lo que trae el PDF -texto crudo- contra la de lo
+    // ya guardado, que paso por la fabrica. Si las dos no normalizan igual, la misma
+    // asignatura sale con dos claves distintas y el segundo import la duplica sin dar
+    // ningun error.
+    const subject = makeSubject({ code: ' ti3210 ', section: ' 01 ', termCode: '2027-1' });
+
+    expect(subjectKeyFor(' 2027-1 ', ' ti3210 ', ' 01 ')).toBe(subjectNaturalKey(subject));
+    expect(subjectNaturalKey(subject)).toBe('2027-1|TI3210|01');
   });
 
   it('conserva la fecha de creacion al editar', () => {

@@ -6,6 +6,7 @@ import type { Subject } from '../../../domain/schedule/subject';
 import type { UseCase, UseCaseContext } from '../use-case';
 import {
   createScheduleBlock,
+  scheduleBlockKeyFor,
   scheduleBlockNaturalKey,
   softDeleteScheduleBlock,
   updateScheduleBlock,
@@ -14,6 +15,7 @@ import {
   createSubject,
   restoreSubject,
   softDeleteSubject,
+  subjectKeyFor,
   subjectNaturalKey,
   updateSubject,
 } from '../../../domain/schedule/subject';
@@ -110,12 +112,23 @@ export class ImportSchedulePdfUseCase implements UseCase<
     let removedBlocks = 0;
 
     for (const [index, incoming] of parsed.subjects.entries()) {
-      const key = `${termCode}|${incoming.code}|${incoming.section}`;
+      const key = subjectKeyFor(termCode, incoming.code, incoming.section);
       const existing = byKey.get(key);
+
+      /* Se marca vista ANTES de intentar nada. Si la asignatura resulta invalida y se
+         salta, la que ya estaba guardada con esa clave NO puede acabar dada de baja: un
+         tropiezo leyendo el documento no puede costar datos. */
       seen.add(key);
 
       const reconciled = this.reconcileSubject(user.id, termCode, incoming, existing, index, now);
-      if (isErr(reconciled)) return reconciled;
+
+      /* Una asignatura que el dominio rechaza no tumba la importacion entera. Es la misma
+         regla que sigue el parser: lo que no se entiende se anota y se sigue, porque un
+         renglon raro no puede costar el horario completo. */
+      if (isErr(reconciled)) {
+        warnings.push(`${incoming.code}: no se pudo guardar (${reconciled.error.message})`);
+        continue;
+      }
 
       const subject = reconciled.value;
       subjectsToSave.push(subject);
@@ -138,13 +151,12 @@ export class ImportSchedulePdfUseCase implements UseCase<
         storedBlocks.value,
         now,
       );
-      if (isErr(blocks)) return blocks;
 
-      blocksToSave.push(...blocks.value.save);
-      createdBlocks += blocks.value.created;
-      updatedBlocks += blocks.value.updated;
-      removedBlocks += blocks.value.removed;
-      warnings.push(...blocks.value.warnings);
+      blocksToSave.push(...blocks.save);
+      createdBlocks += blocks.created;
+      updatedBlocks += blocks.updated;
+      removedBlocks += blocks.removed;
+      warnings.push(...blocks.warnings);
     }
 
     /* Una asignatura que estaba en el cuatrimestre y ya no viene en el documento es una
@@ -246,13 +258,13 @@ export class ImportSchedulePdfUseCase implements UseCase<
     incoming: readonly ParsedScheduleBlock[],
     stored: readonly ScheduleBlock[],
     now: string,
-  ): Result<{
+  ): {
     save: ScheduleBlock[];
     created: number;
     updated: number;
     removed: number;
     warnings: string[];
-  }> {
+  } {
     const byKey = new Map(stored.map((block) => [scheduleBlockNaturalKey(block), block]));
     const seen = new Set<string>();
     const save: ScheduleBlock[] = [];
@@ -263,7 +275,7 @@ export class ImportSchedulePdfUseCase implements UseCase<
     let removed = 0;
 
     for (const block of incoming) {
-      const key = `${subject.id}|${String(block.weekday)}|${block.startsAt}`;
+      const key = scheduleBlockKeyFor(subject.id, block.weekday, block.startsAt);
       if (seen.has(key)) {
         // Dos tramos identicos en el mismo documento: se queda el primero.
         warnings.push(
@@ -291,7 +303,11 @@ export class ImportSchedulePdfUseCase implements UseCase<
           endsOn: block.endsOn,
         });
 
-        if (isErr(result)) return result;
+        if (isErr(result)) {
+          warnings.push(`${subject.code}: clase descartada (${result.error.message})`);
+          continue;
+        }
+
         save.push(result.value);
         created += 1;
         continue;
@@ -310,7 +326,11 @@ export class ImportSchedulePdfUseCase implements UseCase<
         now,
       );
 
-      if (isErr(result)) return result;
+      if (isErr(result)) {
+        warnings.push(`${subject.code}: clase sin actualizar (${result.error.message})`);
+        continue;
+      }
+
       save.push({ ...result.value, deletedAt: null });
       updated += 1;
     }
@@ -323,6 +343,6 @@ export class ImportSchedulePdfUseCase implements UseCase<
       removed += 1;
     }
 
-    return ok({ save, created, updated, removed, warnings });
+    return { save, created, updated, removed, warnings };
   }
 }

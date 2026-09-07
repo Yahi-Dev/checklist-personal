@@ -228,10 +228,20 @@ export const restoreSubject = (subject: Subject, now: IsoDateTime): Subject => (
  *
  * Sin ella, volver a soltar el PDF del cuatrimestre en curso crearia el horario entero
  * por segunda vez, porque los ids son UUID generados en el cliente y nunca coinciden.
+ *
+ * NORMALIZA sus tres partes con las mismas reglas que `createSubject`, y esto no es un
+ * detalle: quien importa compara la clave de lo que viene en el PDF -texto crudo- contra
+ * la de lo ya guardado -que paso por la fabrica y esta en mayusculas y sin espacios
+ * dobles-. Construyendo la clave a mano en cada sitio, bastaba que un cuatrimestre
+ * imprimiera " ti3210 " para que las dos claves no coincidieran y la asignatura se
+ * duplicara en el segundo import, sin ningun error.
  */
+export const subjectKeyFor = (termCode: string, code: string, section: string): string =>
+  `${collapseSpaces(termCode)}|${normalizeCode(code)}|${normalizeCode(section)}`;
+
 export const subjectNaturalKey = (
   subject: Pick<Subject, 'termCode' | 'code' | 'section'>,
-): string => `${subject.termCode}|${subject.code}|${subject.section}`;
+): string => subjectKeyFor(subject.termCode, subject.code, subject.section);
 
 /** `true` si la fecha dada cae dentro del cuatrimestre. Sin fechas se asume vigente. */
 export const isTermActive = (subject: Subject, today: CalendarDate): boolean => {

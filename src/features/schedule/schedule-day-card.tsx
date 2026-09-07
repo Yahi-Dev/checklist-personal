@@ -151,7 +151,9 @@ const ClassRow = ({ item, progress, isLast, onSelect }: ClassRowProps) => {
         <span className="size-1.5 shrink-0 rounded-full bg-line-strong" />
       </span>
 
-      <span className="min-w-0 space-y-0.5 pb-3">
+      {/* `block` explicito: es un <span> -para que sea contenido valido dentro de un
+          <button>- pero sus hijos son de bloque, y sin esto `space-y` no separa nada. */}
+      <span className="block min-w-0 space-y-0.5 pb-3">
         <span className="flex items-center gap-2">
           <span className="min-w-0 truncate text-[15px] leading-snug font-semibold text-ink">
             {subject.name}

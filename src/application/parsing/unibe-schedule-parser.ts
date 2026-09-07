@@ -245,24 +245,56 @@ const groupByPage = (items: readonly PdfTextItem[]): readonly (readonly PdfTextI
   return [...pages.entries()].sort((a, b) => a[0] - b[0]).map(([, bucket]) => bucket);
 };
 
+/** Minimo de dias que tienen que aparecer juntos para dar la cabecera por buena. */
+const MIN_DAY_HEADERS = 3;
+
 /**
  * Mide las columnas en la cabecera de la pagina, o `null` si esta no la lleva.
  *
  * La universidad solo imprime "Lunes Martes Miercoles..." en la primera pagina; la
  * segunda arranca directamente con las asignaturas. De ahi que el llamador conserve las
  * ultimas columnas medidas en vez de exigirlas pagina a pagina.
+ *
+ * Dos cautelas que no son teoricas:
+ *
+ * 1. Los nombres de dia se buscan TODOS EN LA MISMA LINEA BASE. Sin eso, una asignatura
+ *    que se llamara "Taller de los Sabados" prestaria su palabra a la cabecera y la
+ *    columna del sabado se mediria a la altura del nombre, mandando media tabla al dia
+ *    equivocado. Se elige la linea donde coinciden mas dias.
+ * 2. NO se exigen los seis. Un cuatrimestre sin clases en sabado podria dejar de
+ *    imprimir esa columna, y devolver `null` por eso significaria no leer el documento
+ *    entero. Con tres basta para saber que estamos ante la cabecera.
  */
 const measureColumns = (page: readonly PdfTextItem[]): readonly DayColumn[] | null => {
-  const columns: DayColumn[] = [];
+  const candidates = page
+    .map((item) => ({ item, day: DAY_HEADERS.find((entry) => entry.label === item.text) }))
+    .filter(
+      (found): found is { item: PdfTextItem; day: (typeof DAY_HEADERS)[number] } =>
+        found.day !== undefined,
+    );
 
-  for (const day of DAY_HEADERS) {
-    const found = page.find((item) => item.text === day.label);
-    if (found === undefined) return null;
+  if (candidates.length === 0) return null;
 
-    columns.push({ weekday: day.weekday, center: found.x + found.width / 2 });
+  const byBaseline = new Map<number, typeof candidates>();
+
+  for (const candidate of candidates) {
+    /* La linea base se redondea porque el generador escribe los seis rotulos con
+       decimas distintas: 597.7 y 597.71 son la misma fila. */
+    const baseline = Math.round(candidate.item.y);
+    const bucket = byBaseline.get(baseline) ?? [];
+    bucket.push(candidate);
+    byBaseline.set(baseline, bucket);
   }
 
-  return columns;
+  const best = [...byBaseline.values()].sort((a, b) => b.length - a.length)[0];
+  if (best === undefined || best.length < MIN_DAY_HEADERS) return null;
+
+  return best
+    .map((found) => ({
+      weekday: found.day.weekday,
+      center: found.item.x + found.item.width / 2,
+    }))
+    .sort((a, b) => a.center - b.center);
 };
 
 interface SubjectRow {

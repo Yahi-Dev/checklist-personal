@@ -132,7 +132,15 @@ export class DexieScheduleBlockRepository implements ScheduleBlockRepository {
       (async () => {
         const records = await this.read(query);
 
-        return records
+        /* `read` elige UN indice -el de la asignatura o el del dia-, asi que si vienen
+           los dos criterios el segundo hay que aplicarlo aqui. Antes se ignoraba en
+           silencio, que es la peor forma de fallar: devolvia de mas y parecia correcto. */
+        const filtered =
+          query.subjectId !== undefined && query.weekday !== undefined
+            ? records.filter((record) => record.weekday === query.weekday)
+            : records;
+
+        return filtered
           .map((record) => stripHints<ScheduleBlock>(record))
           .sort(
             (a, b) =>

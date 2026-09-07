@@ -208,6 +208,24 @@ describe('repositorios del horario', () => {
       ).toHaveLength(2);
     });
 
+    it('aplica los dos filtros cuando vienen juntos', async () => {
+      // `read` solo puede usar UN indice, asi que el segundo criterio hay que aplicarlo
+      // en memoria. Antes se ignoraba en silencio y devolvia de mas: el peor fallo
+      // posible en una consulta, porque el resultado parece correcto.
+      const subject = makeSubject();
+      await subjects.save(subject);
+
+      await blocks.saveMany([
+        makeBlock(subject.id, { weekday: 1, startsAt: '20:00' }),
+        makeBlock(subject.id, { weekday: 3 as Weekday, startsAt: '20:00' }),
+      ]);
+
+      const lunes = unwrap(await blocks.findAll({ subjectId: subject.id, weekday: 1 }));
+
+      expect(lunes).toHaveLength(1);
+      expect(lunes[0]?.weekday).toBe(1);
+    });
+
     it('encola cada tramo por separado', async () => {
       // Uno por fila y no uno por lote: en el servidor cada tramo es su propia fila, y
       // agruparlos haria que un rechazo se llevara por delante a sus compañeros.
