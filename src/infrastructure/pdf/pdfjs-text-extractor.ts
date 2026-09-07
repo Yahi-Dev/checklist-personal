@@ -3,6 +3,7 @@ import type { PdfTextExtractor, PdfTextItem } from '../../application/ports/serv
 import type { Result } from '../../domain/shared/result';
 import { DomainErrors } from '../../domain/shared/domain-error';
 import { err, fromPromise } from '../../domain/shared/result';
+import { installPromisePolyfills } from './promise-polyfills';
 import { toDomainError } from '../../domain/shared/domain-error';
 
 /**
@@ -39,6 +40,11 @@ export const MAX_PDF_BYTES = 10 * 1024 * 1024;
 let pdfjsPromise: Promise<typeof Pdfjs> | null = null;
 
 const loadPdfjs = async (): Promise<typeof Pdfjs> => {
+  /* FUERA del memorizado, a proposito: se instala en CADA importacion y no solo en la
+     primera. Es idempotente y no cuesta nada, y asi el relleno no depende de que nadie
+     haya tocado `Promise` entre una importacion y la siguiente. Ver `promise-polyfills`. */
+  installPromisePolyfills();
+
   pdfjsPromise ??= (async () => {
     const [library] = await Promise.all([
       import('pdfjs-dist/legacy/build/pdf.mjs'),
@@ -67,9 +73,14 @@ export class PdfjsTextExtractor implements PdfTextExtractor {
       );
     }
 
-    return fromPromise(readItems(bytes), (cause) =>
-      toDomainError(cause, 'No se pudo leer el PDF. Comprueba que no este protegido con clave.'),
-    );
+    /* El motivo real viaja en el mensaje. Un "no se pudo leer el PDF" a secas es
+       indiagnosticable desde un telefono: fue exactamente lo que costo encontrar que
+       faltaba `Promise.withResolvers`. */
+    return fromPromise(readItems(bytes), (cause) => {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+
+      return toDomainError(cause, `No se pudo leer el PDF: ${detail}`);
+    });
   }
 }
 

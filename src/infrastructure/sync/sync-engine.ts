@@ -173,6 +173,9 @@ export class SyncEngine implements SyncService {
     });
   }
 
+  /** Tablas que el servidor no tenia en la pasada actual. Se vacia en cada `runSync`. */
+  private readonly missingTables = new Set<string>();
+
   private async runSync(): Promise<Result<SyncState>> {
     const userId = this.getUserId();
 
@@ -187,6 +190,7 @@ export class SyncEngine implements SyncService {
     }
 
     this.publish({ status: 'syncing', lastError: null });
+    this.missingTables.clear();
 
     /**
      * SUBIDA Y BAJADA SON INDEPENDIENTES.
@@ -249,7 +253,22 @@ export class SyncEngine implements SyncService {
     const now = new Date().toISOString();
     await this.database.setMeta(SYNC_META_KEYS.lastSyncedAt, now);
 
-    this.publish({ status: 'idle', lastSyncedAt: now, lastError: null, ...queue });
+    /**
+     * Faltar una tabla NO es un error de sincronizacion.
+     *
+     * Todo lo demas subio y bajo bien, y lo de esa tabla sigue en la cola esperando, que
+     * es exactamente lo correcto. Pintar el indicador en rojo por esto hacia creer que
+     * las tareas tampoco se estaban guardando, que es justo lo contrario de lo que
+     * pasaba. Se deja el estado en verde y se explica el motivo, nombrando el archivo
+     * que hay que pegar.
+     */
+    const pendingSchema =
+      this.missingTables.size === 0
+        ? null
+        : `Falta crear en Supabase ${[...this.missingTables].join(' y ')}. ` +
+          'Pega supabase/PEGAR-EN-SUPABASE-horario.sql en el editor SQL del panel.';
+
+    this.publish({ status: 'idle', lastSyncedAt: now, lastError: pendingSchema, ...queue });
 
     return ok(this.state);
   }
@@ -432,6 +451,10 @@ export class SyncEngine implements SyncService {
       try {
         await this.pushGroup(entity, group);
       } catch (cause) {
+        if (cause instanceof MissingRemoteTable) {
+          this.missingTables.add(cause.table);
+          continue;
+        }
         failures.push(toDomainError(cause, `No se pudo subir ${entity}.`).message);
       }
     }
@@ -501,6 +524,14 @@ export class SyncEngine implements SyncService {
     });
 
     if (error === null) return;
+
+    /* Antes de nada: si la tabla no existe, ni es una fila mala ni se arregla
+       reintentando. Se avisa hacia arriba con su propio tipo para que la cola quede
+       intacta -esas operaciones son validas y subiran en cuanto exista la tabla- y para
+       que no gasten intentos hasta quedar marcadas como atascadas. */
+    if (isMissingTable(error.code)) {
+      throw new MissingRemoteTable(TABLE_FOR_ENTITY[entity]);
+    }
 
     if (!isRowRejection(error.code)) {
       throw new Error(`Fallo al subir ${entity}: ${error.message}`);
@@ -594,16 +625,41 @@ export class SyncEngine implements SyncService {
    * estricto, y una fila escrita en el mismo instante exacto que la marca guardada
    * caeria fuera de esta bajada y de todas las siguientes.
    */
+  /**
+   * Baja una tabla y deja pasar el caso de que todavia no exista.
+   *
+   * Sin esto, la primera tabla ausente cortaba la bajada de las SIGUIENTES: el `await`
+   * dejaba a medias la cadena y el dispositivo dejaba de recibir cambios de todo lo
+   * demas por culpa de una tabla que ni siquiera usa.
+   */
+  private async pullTolerant(
+    entity: SyncableEntity,
+    userId: string,
+    fetch: (since: string) => Promise<string>,
+  ): Promise<void> {
+    try {
+      await this.pullEntity(entity, userId, fetch);
+    } catch (cause) {
+      if (cause instanceof MissingRemoteTable) {
+        this.missingTables.add(cause.table);
+        return;
+      }
+      throw cause;
+    }
+  }
+
   private async pull(userId: string): Promise<void> {
     // Categorias y etiquetas antes que las tareas, por el mismo motivo que al subir: una
     // tarea que llega antes que su categoria se pinta un instante sin ella.
-    await this.pullEntity('category', userId, (since) => this.pullCategories(userId, since));
-    await this.pullEntity('tag', userId, (since) => this.pullTags(userId, since));
-    await this.pullEntity('task', userId, (since) => this.pullTasks(userId, since));
-    await this.pullEntity('focusSession', userId, (since) => this.pullFocusSessions(userId, since));
+    await this.pullTolerant('category', userId, (since) => this.pullCategories(userId, since));
+    await this.pullTolerant('tag', userId, (since) => this.pullTags(userId, since));
+    await this.pullTolerant('task', userId, (since) => this.pullTasks(userId, since));
+    await this.pullTolerant('focusSession', userId, (since) =>
+      this.pullFocusSessions(userId, since),
+    );
     // Las asignaturas antes que sus tramos, por el mismo motivo que al subir.
-    await this.pullEntity('subject', userId, (since) => this.pullSubjects(userId, since));
-    await this.pullEntity('scheduleBlock', userId, (since) =>
+    await this.pullTolerant('subject', userId, (since) => this.pullSubjects(userId, since));
+    await this.pullTolerant('scheduleBlock', userId, (since) =>
       this.pullScheduleBlocks(userId, since),
     );
   }
@@ -750,7 +806,10 @@ export class SyncEngine implements SyncService {
       .gt('server_updated_at', since)
       .order('server_updated_at', { ascending: true });
 
-    if (error !== null) throw new Error(`Fallo al bajar asignaturas: ${error.message}`);
+    if (error !== null) {
+      if (isMissingTable(error.code)) throw new MissingRemoteTable('subjects');
+      throw new Error(`Fallo al bajar asignaturas: ${error.message}`);
+    }
 
     let watermark = since;
 
@@ -777,7 +836,10 @@ export class SyncEngine implements SyncService {
       .gt('server_updated_at', since)
       .order('server_updated_at', { ascending: true });
 
-    if (error !== null) throw new Error(`Fallo al bajar el horario: ${error.message}`);
+    if (error !== null) {
+      if (isMissingTable(error.code)) throw new MissingRemoteTable('schedule_blocks');
+      throw new Error(`Fallo al bajar el horario: ${error.message}`);
+    }
 
     let watermark = since;
 
@@ -1084,6 +1146,29 @@ const EPOCH = new Date(0).toISOString();
  */
 const sinceFor = (cursor: string): string =>
   new Date(Date.parse(cursor) - appConfig.sync.pullOverlapMs).toISOString();
+
+/**
+ * El servidor todavia no tiene esa tabla.
+ *
+ * Es un estado NORMAL de esta app, no una averia: la PWA se despliega sola en cada push
+ * y el esquema de Supabase se aplica a mano, asi que entre una cosa y la otra el cliente
+ * conoce tablas que el servidor aun no. Antes eso tumbaba la sincronizacion ENTERA -el
+ * indicador en rojo, y el usuario sin saber que sus tareas si estaban subiendo-, cuando
+ * lo unico que pasaba es que faltaba pegar un SQL.
+ */
+class MissingRemoteTable extends Error {
+  constructor(readonly table: string) {
+    super(`La tabla "${table}" todavia no existe en el servidor.`);
+    this.name = 'MissingRemoteTable';
+  }
+}
+
+/**
+ * PostgREST no encuentra la tabla. `PGRST205` es el codigo de su cache de esquema y
+ * `42P01` el de Postgres cuando la consulta llega igualmente.
+ */
+const isMissingTable = (code: string | undefined): boolean =>
+  code === 'PGRST205' || code === '42P01';
 
 const isRowRejection = (code: string | undefined): boolean => {
   if (code === undefined || code === '') return false;
