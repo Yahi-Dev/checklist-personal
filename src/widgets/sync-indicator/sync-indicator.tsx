@@ -55,13 +55,14 @@ export const SyncIndicator = ({ compact = false }: { compact?: boolean }) => {
    * sincronizado", porque segun sus propias cuentas no le quedaba nada pendiente. Aparecer
    * por delante del resto de estados es el punto.
    */
-  const { icon, label, tone } = blocked > 0
-    ? {
-        icon: <AlertCircle className="size-3.5" />,
-        label: `${String(blocked)} sin subir`,
-        tone: 'text-warning',
-      }
-    : describe({ status: state.status, isOnline, pending });
+  const { icon, label, tone } =
+    blocked > 0
+      ? {
+          icon: <AlertCircle className="size-3.5" />,
+          label: `${String(blocked)} sin subir`,
+          tone: 'text-warning',
+        }
+      : describe({ status: state.status, isOnline, pending });
 
   return (
     <Tooltip

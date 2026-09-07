@@ -66,7 +66,8 @@ export const CelebrationLayer = () => {
 // ---------------------------------------------------------------------------
 
 const random = (min: number, max: number): number => min + Math.random() * (max - min);
-const pick = <T,>(options: readonly T[]): T => options[Math.floor(Math.random() * options.length)] as T;
+const pick = <T,>(options: readonly T[]): T =>
+  options[Math.floor(Math.random() * options.length)] as T;
 
 /** Crea un span posicionado en el origen, lo anima y lo retira al terminar. */
 const spawn = (

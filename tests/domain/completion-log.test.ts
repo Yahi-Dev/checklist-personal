@@ -4,7 +4,10 @@ import type { TaskId, UserId } from '../../src/domain/shared/branded';
 import type { Task } from '../../src/domain/task/task';
 
 import { brandId } from '../../src/domain/shared/branded';
-import { buildTaskFilter, wasCompletedBetweenSpec } from '../../src/domain/task/task-specifications';
+import {
+  buildTaskFilter,
+  wasCompletedBetweenSpec,
+} from '../../src/domain/task/task-specifications';
 import { createTask } from '../../src/domain/task/task';
 import { groupByCompletionDay } from '../../src/domain/task/completion-log';
 import { resolveRange } from '../../src/features/completed/completed-range';

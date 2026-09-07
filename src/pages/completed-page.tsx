@@ -302,7 +302,9 @@ const Chip = ({
       'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1',
       'text-xs font-medium transition-colors',
       'focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:outline-none',
-      active ? 'border-transparent bg-brand-600 text-white' : 'border-line text-ink-soft hover:bg-hover',
+      active
+        ? 'border-transparent bg-brand-600 text-white'
+        : 'border-line text-ink-soft hover:bg-hover',
     )}
   >
     {children}

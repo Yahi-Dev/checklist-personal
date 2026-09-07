@@ -152,7 +152,7 @@ export const Skeleton = ({ className, ...props }: HTMLAttributes<HTMLDivElement>
   <div
     // Barrido de luz en vez de parpadeo: un brillo que viaja dice "cargando",
     // el parpadeo de opacidad se lee como "roto".
-    className={cn('animate-shimmer skeleton-shimmer rounded-lg bg-sunken', className)}
+    className={cn('skeleton-shimmer animate-shimmer rounded-lg bg-sunken', className)}
     aria-hidden="true"
     {...props}
   />

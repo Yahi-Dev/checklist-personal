@@ -48,10 +48,7 @@ export const CELEBRATION_EVENT = 'checklist:celebracion';
  * "Tarde" es tener fecha de vencimiento y completar despues de ella. Sin fecha
  * no hay tarde posible: lo que no tiene plazo no puede incumplirlo.
  */
-export const celebrationKindFor = (
-  task: Pick<Task, 'dueAt'>,
-  nowMs: number,
-): CelebrationKind =>
+export const celebrationKindFor = (task: Pick<Task, 'dueAt'>, nowMs: number): CelebrationKind =>
   task.dueAt !== null && Date.parse(task.dueAt) < nowMs ? 'amanecer' : 'brillante';
 
 /** Lanza la celebracion. Puede llamarse desde cualquier sitio, sin contexto. */
