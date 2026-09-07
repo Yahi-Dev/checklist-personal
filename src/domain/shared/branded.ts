@@ -17,6 +17,8 @@ export type CategoryId = Brand<string, 'CategoryId'>;
 export type TagId = Brand<string, 'TagId'>;
 export type AttachmentId = Brand<string, 'AttachmentId'>;
 export type FocusSessionId = Brand<string, 'FocusSessionId'>;
+export type SubjectId = Brand<string, 'SubjectId'>;
+export type ScheduleBlockId = Brand<string, 'ScheduleBlockId'>;
 
 /**
  * Marca un string ya validado como identificador tipado.

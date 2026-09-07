@@ -113,6 +113,8 @@ export interface AdoptedDataSummary {
   readonly categorias: number;
   readonly etiquetas: number;
   readonly sesiones: number;
+  readonly asignaturas: number;
+  readonly clases: number;
   /** Categorias por defecto intactas que se descartaron en vez de duplicarse. */
   readonly categoriasDescartadas: number;
 }
@@ -210,11 +212,41 @@ export class AdoptLocalDataUseCase implements UseCase<AdoptLocalDataCommand, Ado
       if (isErr(saved)) return saved;
     }
 
+    // --- Horario academico -----------------------------------------------
+    /* Sin este bloque, un horario importado en modo local se queda con el dueño
+       ficticio y RLS lo rechaza fila por fila para siempre en cuanto hay sesion. Es el
+       mismo agujero que documenta la cabecera de este archivo, aplicado al horario. */
+    const subjects = await this.context.subjects.findAll({ includeDeleted: true });
+    if (isErr(subjects)) return subjects;
+
+    const orphanSubjects = subjects.value
+      .filter(isOrphan)
+      .map((subject) => ({ ...subject, userId: owner.id, updatedAt: now }));
+
+    if (orphanSubjects.length > 0) {
+      const saved = await this.context.subjects.saveMany(orphanSubjects);
+      if (isErr(saved)) return saved;
+    }
+
+    const blocks = await this.context.scheduleBlocks.findAll({ includeDeleted: true });
+    if (isErr(blocks)) return blocks;
+
+    const orphanBlocks = blocks.value
+      .filter(isOrphan)
+      .map((block) => ({ ...block, userId: owner.id, updatedAt: now }));
+
+    if (orphanBlocks.length > 0) {
+      const saved = await this.context.scheduleBlocks.saveMany(orphanBlocks);
+      if (isErr(saved)) return saved;
+    }
+
     return ok({
       tareas: orphanTasks.length,
       categorias: adoptable.length,
       etiquetas: orphanTags.length,
       sesiones: orphanSessions.length,
+      asignaturas: orphanSubjects.length,
+      clases: orphanBlocks.length,
       categoriasDescartadas: discardable.length,
     });
   }
@@ -225,6 +257,8 @@ const EMPTY_SUMMARY: AdoptedDataSummary = {
   categorias: 0,
   etiquetas: 0,
   sesiones: 0,
+  asignaturas: 0,
+  clases: 0,
   categoriasDescartadas: 0,
 };
 

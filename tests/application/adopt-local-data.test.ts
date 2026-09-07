@@ -147,6 +147,8 @@ describe('AdoptLocalDataUseCase', () => {
       categorias: 0,
       etiquetas: 0,
       sesiones: 0,
+      asignaturas: 0,
+      clases: 0,
       categoriasDescartadas: 0,
     });
   });

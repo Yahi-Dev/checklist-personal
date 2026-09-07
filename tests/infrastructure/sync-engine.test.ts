@@ -86,7 +86,14 @@ const makeSupabase = (options: {
         return query;
       },
     }),
-    channel: () => ({ on: () => ({ on: () => ({}) }), subscribe: () => ({}) }),
+    /* Cadena que se devuelve a si misma. La version anterior soportaba exactamente dos
+       `.on()` encadenados y el codigo real ya hace seis: en cuanto una prueba llamara a
+       `startRealtime()`, reventaria con "on is not a function" por un limite del doble,
+       no por un fallo del motor. */
+    channel: () => {
+      const channel = { on: () => channel, subscribe: () => channel };
+      return channel;
+    },
     removeChannel: () => Promise.resolve('ok'),
   };
 
@@ -290,11 +297,7 @@ describe('SyncEngine', () => {
      * siempre, y las tareas que apuntan a ellas fallan ademas por clave foranea: 409 en las
      * dos tablas a la vez, en bucle.
      */
-    const guardarCategoria = async (
-      id: string,
-      name: string,
-      dirty: 0 | 1,
-    ): Promise<void> => {
+    const guardarCategoria = async (id: string, name: string, dirty: 0 | 1): Promise<void> => {
       await database.categories.put({
         id: brandId('cat-' + id),
         userId: USER,
@@ -420,6 +423,105 @@ describe('SyncEngine', () => {
 
       const guardada = await database.tasks.get(task.id);
       expect(guardada?._dirty).toBe(1);
+    });
+  });
+
+  describe('horario academico', () => {
+    it('sube las asignaturas ANTES que sus clases', async () => {
+      // No es una preferencia: en el servidor `schedule_blocks.subject_id` referencia a
+      // `subjects.id`. Al reves, el insert del tramo devuelve 23503, `isRowRejection` lo
+      // clasifica como rechazo de fila, y tras la biseccion y diez intentos esa entrada
+      // queda envenenada en la cola para siempre.
+      await outbox.enqueue('scheduleBlock', 'blk-1', 'upsert', { id: 'blk-1' }, NOW);
+      await outbox.enqueue('subject', 'sub-1', 'upsert', { id: 'sub-1' }, NOW);
+
+      const { client, upserts } = makeSupabase({});
+
+      await engineFor(client).sync();
+
+      const tablas = upserts.map((entry) => entry.table);
+      expect(tablas.indexOf('subjects')).toBeLessThan(tablas.indexOf('schedule_blocks'));
+    });
+
+    it('lleva su propio cursor de bajada por tabla', async () => {
+      // Una marca compartida perderia filas: si la asignatura mas nueva es de las 15:00 y
+      // el tramo mas nuevo de las 14:00, la marca comun quedaria en las 15:00 y un tramo
+      // escrito a las 14:30 no entraria en ninguna bajada posterior.
+      const { client } = makeSupabase({
+        rows: {
+          subjects: [
+            {
+              id: '33333333-3333-4333-8333-333333333333',
+              user_id: USER,
+              code: 'TI3210',
+              name: 'Logica Matematica',
+              section: '01',
+              credits: 3,
+              teacher_code: null,
+              teacher_name: null,
+              color: '#6366f1',
+              term_code: '2027-1',
+              starts_on: '2026-09-07',
+              ends_on: '2026-12-19',
+              position: 0,
+              created_at: NOW,
+              updated_at: NOW,
+              server_updated_at: '2026-08-04T15:00:00.000Z',
+              deleted_at: null,
+            },
+          ],
+          schedule_blocks: [
+            {
+              id: '44444444-4444-4444-8444-444444444444',
+              user_id: USER,
+              subject_id: '33333333-3333-4333-8333-333333333333',
+              weekday: 1,
+              starts_at: '20:00',
+              ends_at: '22:00',
+              modality: 'presencial',
+              location_label: 'FR1-411',
+              is_remote: false,
+              starts_on: '2026-09-07',
+              ends_on: '2026-12-19',
+              created_at: NOW,
+              updated_at: NOW,
+              server_updated_at: '2026-08-04T14:00:00.000Z',
+              deleted_at: null,
+            },
+          ],
+        },
+      });
+
+      await engineFor(client).sync();
+
+      expect(await database.subjects.count()).toBe(1);
+      expect(await database.scheduleBlocks.count()).toBe(1);
+
+      // Cada tabla avanza su marca hasta SU propia fila mas nueva, no hasta la del vecino.
+      expect(await database.getMeta(pullCursorKey('subject', USER))).toBe(
+        '2026-08-04T15:00:00.000Z',
+      );
+      expect(await database.getMeta(pullCursorKey('scheduleBlock', USER))).toBe(
+        '2026-08-04T14:00:00.000Z',
+      );
+    });
+
+    it('deja limpias las filas que el servidor acepto', async () => {
+      // Sin el caso nuevo en `tableFor`, el `_dirty` no bajaria nunca y la misma
+      // asignatura se reenviaria en cada pasada, para siempre.
+      await outbox.enqueue('subject', 'sub-1', 'upsert', { id: 'sub-1' }, NOW);
+      await database.subjects.put({
+        id: 'sub-1',
+        updatedAt: NOW,
+        _deleted: 0,
+        _dirty: 1,
+      } as never);
+
+      const { client } = makeSupabase({});
+      await engineFor(client).sync();
+
+      const guardada = await database.subjects.get('sub-1');
+      expect(guardada?._dirty).toBe(0);
     });
   });
 });

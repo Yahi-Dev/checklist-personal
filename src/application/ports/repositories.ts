@@ -2,6 +2,8 @@ import type { Category } from '../../domain/category/category';
 import type {
   CategoryId,
   FocusSessionId,
+  ScheduleBlockId,
+  SubjectId,
   TagId,
   TaskId,
   UserId,
@@ -9,6 +11,8 @@ import type {
 import type { FocusSession } from '../../domain/focus/focus-session';
 import type { IsoDateTime } from '../../domain/task/value-objects/iso-date-time';
 import type { Result } from '../../domain/shared/result';
+import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
+import type { Subject } from '../../domain/schedule/subject';
 import type { Tag } from '../../domain/tag/tag';
 import type { Task } from '../../domain/task/task';
 
@@ -69,6 +73,34 @@ export interface FocusSessionRepository {
   findActive(): Promise<Result<FocusSession | null>>;
   save(session: FocusSession): Promise<Result<FocusSession>>;
   saveMany(sessions: readonly FocusSession[]): Promise<Result<FocusSession[]>>;
+}
+
+export interface SubjectQuery {
+  readonly includeDeleted?: boolean;
+  readonly termCode?: string;
+}
+
+export interface SubjectRepository {
+  findById(id: SubjectId): Promise<Result<Subject | null>>;
+  findAll(query?: SubjectQuery): Promise<Result<Subject[]>>;
+  save(subject: Subject): Promise<Result<Subject>>;
+  saveMany(subjects: readonly Subject[]): Promise<Result<Subject[]>>;
+  hardDelete(id: SubjectId): Promise<Result<void>>;
+}
+
+export interface ScheduleBlockQuery {
+  readonly includeDeleted?: boolean;
+  readonly subjectId?: SubjectId;
+  /** 0 = domingo ... 6 = sabado. */
+  readonly weekday?: number;
+}
+
+export interface ScheduleBlockRepository {
+  findById(id: ScheduleBlockId): Promise<Result<ScheduleBlock | null>>;
+  findAll(query?: ScheduleBlockQuery): Promise<Result<ScheduleBlock[]>>;
+  save(block: ScheduleBlock): Promise<Result<ScheduleBlock>>;
+  saveMany(blocks: readonly ScheduleBlock[]): Promise<Result<ScheduleBlock[]>>;
+  hardDelete(id: ScheduleBlockId): Promise<Result<void>>;
 }
 
 /** Unidad de trabajo: agrupa varias escrituras en una sola transaccion local. */

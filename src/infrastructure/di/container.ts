@@ -11,12 +11,17 @@ import {
   DexieFocusSessionRepository,
   DexieTagRepository,
 } from '../persistence/dexie-repositories';
+import {
+  DexieScheduleBlockRepository,
+  DexieSubjectRepository,
+} from '../persistence/dexie-schedule-repositories';
 import { DexieTaskRepository } from '../persistence/dexie-task-repository';
 import { EdgeAdvisorService, UnavailableAdvisorService } from '../assistant/edge-advisor-service';
 import { ElectronNotificationService } from '../notifications/electron-notification-service';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabase/client';
 import { LocalAuthService, NullSyncService } from '../auth/local-auth-service';
 import { Outbox } from '../persistence/outbox';
+import { PdfjsTextExtractor } from '../pdf/pdfjs-text-extractor';
 import { ReminderScheduler } from '../../application/services/reminder-scheduler';
 import { SupabaseAuthService } from '../supabase/supabase-auth-service';
 import { SupabaseFileStorage, UnavailableFileStorage } from '../supabase/supabase-file-storage';
@@ -63,6 +68,12 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
   const categories = new DexieCategoryRepository(database, outbox);
   const tags = new DexieTagRepository(database, outbox);
   const focusSessions = new DexieFocusSessionRepository(database, outbox);
+  const subjects = new DexieSubjectRepository(database, outbox);
+  const scheduleBlocks = new DexieScheduleBlockRepository(database, outbox);
+
+  /* Se construye siempre, pero no carga nada: pdfjs entra por `import()` dinamico la
+     primera vez que alguien importa un horario, y no antes. */
+  const pdf = new PdfjsTextExtractor();
 
   const bridge = desktopBridge();
   const platform =
@@ -95,6 +106,8 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
     categories,
     tags,
     focusSessions,
+    subjects,
+    scheduleBlocks,
     clock,
     ids,
     notifications,
@@ -102,6 +115,7 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
     files,
     platform,
     advisor,
+    pdf,
     currentUser: () => currentUser,
   };
 

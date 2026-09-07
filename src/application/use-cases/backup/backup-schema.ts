@@ -134,6 +134,47 @@ export const focusSessionBackupSchema = z.object({
   updatedAt: isoDateTime,
 });
 
+const calendarDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/u, { message: 'Fecha AAAA-MM-DD no valida' })
+  .nullable();
+
+export const subjectBackupSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  code: z.string(),
+  name: z.string(),
+  section: z.string(),
+  credits: z.number().int().nullable(),
+  teacherCode: z.string().nullable(),
+  teacherName: z.string().nullable(),
+  color: z.string(),
+  termCode: z.string(),
+  startsOn: calendarDate,
+  endsOn: calendarDate,
+  position: z.number(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+  deletedAt: nullableIso,
+});
+
+export const scheduleBlockBackupSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  subjectId: z.string(),
+  weekday: z.number().int().min(0).max(6),
+  startsAt: z.string().regex(/^\d{2}:\d{2}$/u, { message: 'Hora HH:mm no valida' }),
+  endsAt: z.string().regex(/^\d{2}:\d{2}$/u, { message: 'Hora HH:mm no valida' }),
+  modality: z.enum(['presencial', 'semipresencial', 'virtual']),
+  locationLabel: z.string(),
+  isRemote: z.boolean(),
+  startsOn: calendarDate,
+  endsOn: calendarDate,
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+  deletedAt: nullableIso,
+});
+
 export const backupFileSchema = z.object({
   format: z.literal(BACKUP_FORMAT_ID),
   version: z.number().int().min(1).max(BACKUP_VERSION),
@@ -144,6 +185,11 @@ export const backupFileSchema = z.object({
     categories: z.array(categoryBackupSchema),
     tags: z.array(tagBackupSchema),
     focusSessions: z.array(focusSessionBackupSchema).default([]),
+    /* `.default([])` no es decorativo: sin el, un respaldo hecho ANTES de que existiera
+       el horario dejaria de validar y el usuario no podria restaurar sus propias
+       tareas por culpa de una funcion que no usaba. */
+    subjects: z.array(subjectBackupSchema).default([]),
+    scheduleBlocks: z.array(scheduleBlockBackupSchema).default([]),
   }),
 });
 

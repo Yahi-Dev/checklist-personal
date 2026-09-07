@@ -4,6 +4,8 @@ import type { Category } from '../../src/domain/category/category';
 import type {
   CategoryId,
   FocusSessionId,
+  ScheduleBlockId,
+  SubjectId,
   TagId,
   TaskId,
   UserId,
@@ -11,25 +13,34 @@ import type {
 import type {
   AdvisorEvent,
   AdvisorTurn,
+  PdfTextExtractor,
+  PdfTextItem,
   PlanningAdvisorService,
 } from '../../src/application/ports/services';
 import type {
   CategoryRepository,
   CurrentUser,
   FocusSessionRepository,
+  ScheduleBlockQuery,
+  ScheduleBlockRepository,
+  SubjectQuery,
+  SubjectRepository,
   TagRepository,
   TaskQuery,
   TaskRepository,
 } from '../../src/application/ports/repositories';
 import type { FocusSession } from '../../src/domain/focus/focus-session';
 import type { Result } from '../../src/domain/shared/result';
+import type { ScheduleBlock } from '../../src/domain/schedule/schedule-block';
+import type { Subject } from '../../src/domain/schedule/subject';
 import type { Tag } from '../../src/domain/tag/tag';
 import type { Task } from '../../src/domain/task/task';
 import type { UseCaseContext } from '../../src/application/use-cases/use-case';
 
 import { brandId } from '../../src/domain/shared/branded';
 import { FixedClock } from '../../src/domain/shared/clock';
-import { ok } from '../../src/domain/shared/result';
+import { DomainErrors } from '../../src/domain/shared/domain-error';
+import { err, ok } from '../../src/domain/shared/result';
 import { ReminderScheduler } from '../../src/application/services/reminder-scheduler';
 import { SequentialIdGenerator } from '../../src/domain/shared/id-generator';
 
@@ -220,6 +231,102 @@ export class ScriptedAdvisorService implements PlanningAdvisorService {
   }
 }
 
+export class InMemorySubjectRepository implements SubjectRepository {
+  readonly items = new Map<string, Subject>();
+
+  async findById(id: SubjectId): Promise<Result<Subject | null>> {
+    return ok(this.items.get(id) ?? null);
+  }
+
+  async findAll(query: SubjectQuery = {}): Promise<Result<Subject[]>> {
+    const all = [...this.items.values()].filter(
+      (item) => query.termCode === undefined || item.termCode === query.termCode,
+    );
+
+    return ok(query.includeDeleted === true ? all : all.filter((item) => item.deletedAt === null));
+  }
+
+  async save(subject: Subject): Promise<Result<Subject>> {
+    this.items.set(subject.id, subject);
+    return ok(subject);
+  }
+
+  async saveMany(subjects: readonly Subject[]): Promise<Result<Subject[]>> {
+    for (const subject of subjects) this.items.set(subject.id, subject);
+    return ok([...subjects]);
+  }
+
+  async hardDelete(id: SubjectId): Promise<Result<void>> {
+    this.items.delete(id);
+    return ok(undefined);
+  }
+}
+
+export class InMemoryScheduleBlockRepository implements ScheduleBlockRepository {
+  readonly items = new Map<string, ScheduleBlock>();
+
+  async findById(id: ScheduleBlockId): Promise<Result<ScheduleBlock | null>> {
+    return ok(this.items.get(id) ?? null);
+  }
+
+  async findAll(query: ScheduleBlockQuery = {}): Promise<Result<ScheduleBlock[]>> {
+    const all = [...this.items.values()].filter(
+      (item) =>
+        (query.subjectId === undefined || item.subjectId === query.subjectId) &&
+        (query.weekday === undefined || item.weekday === query.weekday),
+    );
+
+    return ok(query.includeDeleted === true ? all : all.filter((item) => item.deletedAt === null));
+  }
+
+  async save(block: ScheduleBlock): Promise<Result<ScheduleBlock>> {
+    this.items.set(block.id, block);
+    return ok(block);
+  }
+
+  async saveMany(blocks: readonly ScheduleBlock[]): Promise<Result<ScheduleBlock[]>> {
+    for (const block of blocks) this.items.set(block.id, block);
+    return ok([...blocks]);
+  }
+
+  async hardDelete(id: ScheduleBlockId): Promise<Result<void>> {
+    this.items.delete(id);
+    return ok(undefined);
+  }
+}
+
+/**
+ * Extractor de PDF de mentira: devuelve los fragmentos que se le den.
+ *
+ * El proyecto no usa `vi.mock` en ninguna prueba, y aqui tampoco hace falta: como el
+ * extractor es un PUERTO, basta con darle otra implementacion. La ventaja practica es
+ * que las pruebas de importacion corren con los fragmentos de un horario real sin
+ * cargar pdfjs ni leer un binario.
+ */
+export class StubPdfTextExtractor implements PdfTextExtractor {
+  /** Los bytes que ha recibido, para comprobar que llegan sin tocar. */
+  readonly calls: Uint8Array[] = [];
+
+  constructor(private items: readonly PdfTextItem[] = []) {}
+
+  setItems(items: readonly PdfTextItem[]): void {
+    this.items = items;
+  }
+
+  /** Hace que la siguiente extraccion falle, para probar la propagacion del error. */
+  failWith: string | null = null;
+
+  async extract(bytes: Uint8Array): Promise<Result<readonly PdfTextItem[]>> {
+    this.calls.push(bytes);
+
+    if (this.failWith !== null) {
+      return err(DomainErrors.infrastructure(this.failWith));
+    }
+
+    return ok(this.items);
+  }
+}
+
 export interface TestHarness {
   readonly context: UseCaseContext;
   readonly advisor: ScriptedAdvisorService;
@@ -227,6 +334,9 @@ export interface TestHarness {
   readonly categories: InMemoryCategoryRepository;
   readonly tags: InMemoryTagRepository;
   readonly focusSessions: InMemoryFocusSessionRepository;
+  readonly subjects: InMemorySubjectRepository;
+  readonly scheduleBlocks: InMemoryScheduleBlockRepository;
+  readonly pdf: StubPdfTextExtractor;
   readonly clock: FixedClock;
   readonly notifications: {
     schedule: ReturnType<typeof vi.fn>;
@@ -247,6 +357,9 @@ export const createTestHarness = (
   const categories = new InMemoryCategoryRepository();
   const tags = new InMemoryTagRepository();
   const focusSessions = new InMemoryFocusSessionRepository();
+  const subjects = new InMemorySubjectRepository();
+  const scheduleBlocks = new InMemoryScheduleBlockRepository();
+  const pdf = new StubPdfTextExtractor();
 
   const notifications = {
     getPermission: vi.fn(async () => 'granted' as const),
@@ -283,6 +396,9 @@ export const createTestHarness = (
     categories,
     tags,
     focusSessions,
+    subjects,
+    scheduleBlocks,
+    pdf,
     clock,
     ids,
     advisor,
@@ -297,5 +413,17 @@ export const createTestHarness = (
     currentUser: () => user,
   };
 
-  return { context, advisor, tasks, categories, tags, focusSessions, clock, notifications };
+  return {
+    context,
+    advisor,
+    tasks,
+    categories,
+    tags,
+    focusSessions,
+    subjects,
+    scheduleBlocks,
+    pdf,
+    clock,
+    notifications,
+  };
 };

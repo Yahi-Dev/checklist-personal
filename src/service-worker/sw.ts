@@ -1,6 +1,8 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
+import { CacheFirst } from 'workbox-strategies';
 import { clientsClaim } from 'workbox-core';
+import { ExpirationPlugin } from 'workbox-expiration';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { createHandlerBoundToURL } from 'workbox-precaching';
 
@@ -32,6 +34,30 @@ cleanupOutdatedCaches();
  * documento cubre todas las rutas.
  */
 registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
+
+/**
+ * pdfjs: se guarda al usarlo, no al instalar.
+ *
+ * Es el unico trozo del bundle que queda FUERA del precache (`globIgnores` en
+ * `vite.config.ts`), porque pesa mas que el resto de la app junta y solo hace falta al
+ * importar el horario de la universidad. Sin esta ruta, todo lo que no esta precacheado
+ * es network-only, y eso romperia la importacion sin conexion, que es justo lo que la
+ * app promete.
+ *
+ * `CacheFirst` y no `StaleWhileRevalidate` porque el nombre del archivo lleva el hash
+ * del contenido: si cambia el contenido, cambia la URL. Revalidar solo gastaria red para
+ * confirmar algo que no puede haber cambiado.
+ *
+ * Con expiracion propia: `cleanupOutdatedCaches` solo limpia el precache, asi que sin
+ * este limite las versiones viejas de pdfjs se acumularian para siempre.
+ */
+registerRoute(
+  ({ url }) => /\/assets\/pdfjs-[^/]+\.js$/.test(url.pathname),
+  new CacheFirst({
+    cacheName: 'pdfjs',
+    plugins: [new ExpirationPlugin({ maxEntries: 2, purgeOnQuotaError: true })],
+  }),
+);
 
 /**
  * LA VERSION NUEVA ESPERA. NO SE ACTIVA SOLA.

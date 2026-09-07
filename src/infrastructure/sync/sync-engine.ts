@@ -6,7 +6,14 @@ import type { Task } from '../../domain/task/task';
 
 import type { AppDatabase } from '../persistence/database';
 import type { AppSupabaseClient } from '../supabase/client';
-import type { CategoryRow, FocusSessionRow, TagRow, TaskRow } from '../supabase/database.types';
+import type {
+  CategoryRow,
+  FocusSessionRow,
+  ScheduleBlockRow,
+  SubjectRow,
+  TagRow,
+  TaskRow,
+} from '../supabase/database.types';
 import type { IndexHints, OutboxEntry, SyncableEntity } from '../persistence/records';
 import type { Result } from '../../domain/shared/result';
 import type { SyncService, SyncState } from '../../application/ports/services';
@@ -29,8 +36,12 @@ import {
   focusSessionToRow,
   rowToCategory,
   rowToFocusSession,
+  rowToScheduleBlock,
+  rowToSubject,
   rowToTag,
   rowToTask,
+  scheduleBlockToRow,
+  subjectToRow,
   tagToRow,
   taskToRow,
 } from '../supabase/mappers';
@@ -249,7 +260,9 @@ export class SyncEngine implements SyncService {
    * Se calcula en un solo sitio para que el indicador no pueda contradecirse consigo
    * mismo segun por donde haya pasado la sincronizacion.
    */
-  private async queueSummary(): Promise<Pick<SyncState, 'pendingOperations' | 'blockedOperations' | 'blockedReason'>> {
+  private async queueSummary(): Promise<
+    Pick<SyncState, 'pendingOperations' | 'blockedOperations' | 'blockedReason'>
+  > {
     const blocked = await this.outbox.poisoned();
     const [first] = blocked;
 
@@ -398,7 +411,18 @@ export class SyncEngine implements SyncService {
     const entries = await this.outbox.pending(appConfig.sync.pageSize);
     if (entries.length === 0) return;
 
-    const order: SyncableEntity[] = ['category', 'tag', 'task', 'focusSession'];
+    /* El orden es una restriccion de CLAVE FORANEA, no una preferencia: un tramo de
+       horario referencia a su asignatura, asi que si viaja antes que ella el servidor
+       devuelve 23503, la biseccion aisla la fila, agota sus diez intentos y esa entrada
+       queda envenenada para siempre. */
+    const order: SyncableEntity[] = [
+      'category',
+      'tag',
+      'task',
+      'focusSession',
+      'subject',
+      'scheduleBlock',
+    ];
     const failures: string[] = [];
 
     for (const entity of order) {
@@ -503,8 +527,19 @@ export class SyncEngine implements SyncService {
         return tagToRow(payload as Parameters<typeof tagToRow>[0]);
       case 'focusSession':
         return focusSessionToRow(payload as Parameters<typeof focusSessionToRow>[0]);
-      default:
-        throw new Error(`Entidad desconocida en la cola: ${String(entity)}`);
+      case 'subject':
+        return subjectToRow(payload as Parameters<typeof subjectToRow>[0]);
+      case 'scheduleBlock':
+        return scheduleBlockToRow(payload as Parameters<typeof scheduleBlockToRow>[0]);
+      default: {
+        /* Guardia de exhaustividad. Antes habia un `throw` a secas y eso ANULABA la
+           comprobacion del compilador: añadir un tipo de entidad nuevo y olvidarse de
+           esta linea compilaba en verde y reventaba en produccion, tumbando la subida
+           entera de esa tabla. Asignar a `never` convierte el olvido en error de
+           compilacion. */
+        const unreachable: never = entity;
+        throw new Error(`Entidad desconocida en la cola: ${String(unreachable)}`);
+      }
     }
   }
 
@@ -565,8 +600,11 @@ export class SyncEngine implements SyncService {
     await this.pullEntity('category', userId, (since) => this.pullCategories(userId, since));
     await this.pullEntity('tag', userId, (since) => this.pullTags(userId, since));
     await this.pullEntity('task', userId, (since) => this.pullTasks(userId, since));
-    await this.pullEntity('focusSession', userId, (since) =>
-      this.pullFocusSessions(userId, since),
+    await this.pullEntity('focusSession', userId, (since) => this.pullFocusSessions(userId, since));
+    // Las asignaturas antes que sus tramos, por el mismo motivo que al subir.
+    await this.pullEntity('subject', userId, (since) => this.pullSubjects(userId, since));
+    await this.pullEntity('scheduleBlock', userId, (since) =>
+      this.pullScheduleBlocks(userId, since),
     );
   }
 
@@ -643,7 +681,13 @@ export class SyncEngine implements SyncService {
 
     for (const row of (data ?? []) as CategoryRow[]) {
       const remote = rowToCategory(row);
-      await this.applyRemote(this.database.categories, 'category', remote.id, remote, remote.updatedAt);
+      await this.applyRemote(
+        this.database.categories,
+        'category',
+        remote.id,
+        remote,
+        remote.updatedAt,
+      );
       watermark = maxIso(watermark, row.server_updated_at);
     }
 
@@ -685,7 +729,67 @@ export class SyncEngine implements SyncService {
 
     for (const row of (data ?? []) as FocusSessionRow[]) {
       const remote = rowToFocusSession(row);
-      await this.applyRemote(this.database.focusSessions, 'focusSession', remote.id, remote, remote.updatedAt);
+      await this.applyRemote(
+        this.database.focusSessions,
+        'focusSession',
+        remote.id,
+        remote,
+        remote.updatedAt,
+      );
+      watermark = maxIso(watermark, row.server_updated_at);
+    }
+
+    return watermark;
+  }
+
+  private async pullSubjects(userId: string, since: string): Promise<string> {
+    const { data, error } = await this.supabase
+      .from('subjects')
+      .select('*')
+      .eq('user_id', userId)
+      .gt('server_updated_at', since)
+      .order('server_updated_at', { ascending: true });
+
+    if (error !== null) throw new Error(`Fallo al bajar asignaturas: ${error.message}`);
+
+    let watermark = since;
+
+    for (const row of (data ?? []) as SubjectRow[]) {
+      const remote = rowToSubject(row);
+      await this.applyRemote(
+        this.database.subjects,
+        'subject',
+        remote.id,
+        remote,
+        remote.updatedAt,
+      );
+      watermark = maxIso(watermark, row.server_updated_at);
+    }
+
+    return watermark;
+  }
+
+  private async pullScheduleBlocks(userId: string, since: string): Promise<string> {
+    const { data, error } = await this.supabase
+      .from('schedule_blocks')
+      .select('*')
+      .eq('user_id', userId)
+      .gt('server_updated_at', since)
+      .order('server_updated_at', { ascending: true });
+
+    if (error !== null) throw new Error(`Fallo al bajar el horario: ${error.message}`);
+
+    let watermark = since;
+
+    for (const row of (data ?? []) as ScheduleBlockRow[]) {
+      const remote = rowToScheduleBlock(row);
+      await this.applyRemote(
+        this.database.scheduleBlocks,
+        'scheduleBlock',
+        remote.id,
+        remote,
+        remote.updatedAt,
+      );
       watermark = maxIso(watermark, row.server_updated_at);
     }
 
@@ -750,8 +854,16 @@ export class SyncEngine implements SyncService {
         return this.database.tags;
       case 'focusSession':
         return this.database.focusSessions;
-      default:
-        throw new Error(`Entidad desconocida: ${String(entity)}`);
+      case 'subject':
+        return this.database.subjects;
+      case 'scheduleBlock':
+        return this.database.scheduleBlocks;
+      default: {
+        // Mismo motivo que en `toRow`: sin esto el `switch` deja de ser exhaustivo y
+        // olvidar un caso hace que su `_dirty` no baje nunca y se reenvie sin fin.
+        const unreachable: never = entity;
+        throw new Error(`Entidad desconocida: ${String(unreachable)}`);
+      }
     }
   }
 
@@ -796,6 +908,8 @@ export class SyncEngine implements SyncService {
         this.database.categories.clear(),
         this.database.tags.clear(),
         this.database.focusSessions.clear(),
+        this.database.subjects.clear(),
+        this.database.scheduleBlocks.clear(),
       ]);
       for (const entity of SYNCABLE_ENTITIES) {
         await this.database.setMeta(pullCursorKey(entity, userId), EPOCH);
@@ -846,7 +960,23 @@ export class SyncEngine implements SyncService {
         void this.applyRealtimeChange(this.database.tags, 'tag', payload, rowToTag);
       })
       .on('postgres_changes', { ...watch, table: 'focus_sessions' }, (payload) => {
-        void this.applyRealtimeChange(this.database.focusSessions, 'focusSession', payload, rowToFocusSession);
+        void this.applyRealtimeChange(
+          this.database.focusSessions,
+          'focusSession',
+          payload,
+          rowToFocusSession,
+        );
+      })
+      .on('postgres_changes', { ...watch, table: 'subjects' }, (payload) => {
+        void this.applyRealtimeChange(this.database.subjects, 'subject', payload, rowToSubject);
+      })
+      .on('postgres_changes', { ...watch, table: 'schedule_blocks' }, (payload) => {
+        void this.applyRealtimeChange(
+          this.database.scheduleBlocks,
+          'scheduleBlock',
+          payload,
+          rowToScheduleBlock,
+        );
       })
       .subscribe((status) => {
         this.onRealtimeStatus(status);

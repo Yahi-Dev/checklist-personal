@@ -102,6 +102,44 @@ export type FocusSessionRow = {
   server_updated_at: string;
 };
 
+export type SubjectRow = {
+  id: string;
+  user_id: string;
+  code: string;
+  name: string;
+  section: string;
+  credits: number | null;
+  teacher_code: string | null;
+  teacher_name: string | null;
+  color: string;
+  term_code: string;
+  starts_on: string | null;
+  ends_on: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+  server_updated_at: string;
+  deleted_at: string | null;
+};
+
+export type ScheduleBlockRow = {
+  id: string;
+  user_id: string;
+  subject_id: string;
+  weekday: number;
+  starts_at: string;
+  ends_at: string;
+  modality: 'presencial' | 'semipresencial' | 'virtual';
+  location_label: string;
+  is_remote: boolean;
+  starts_on: string | null;
+  ends_on: string | null;
+  created_at: string;
+  updated_at: string;
+  server_updated_at: string;
+  deleted_at: string | null;
+};
+
 export type PushSubscriptionRow = {
   id: string;
   user_id: string;
@@ -154,6 +192,20 @@ export type Database = {
         Update: Partial<FocusSessionRow>;
         Relationships: [];
       };
+      subjects: {
+        Row: SubjectRow;
+        Insert: Omit<SubjectRow, 'created_at' | 'updated_at' | 'server_updated_at'> &
+          Partial<Pick<SubjectRow, 'created_at' | 'updated_at'>>;
+        Update: Partial<SubjectRow>;
+        Relationships: [];
+      };
+      schedule_blocks: {
+        Row: ScheduleBlockRow;
+        Insert: Omit<ScheduleBlockRow, 'created_at' | 'updated_at' | 'server_updated_at'> &
+          Partial<Pick<ScheduleBlockRow, 'created_at' | 'updated_at'>>;
+        Update: Partial<ScheduleBlockRow>;
+        Relationships: [];
+      };
       push_subscriptions: {
         Row: PushSubscriptionRow;
         Insert: Omit<PushSubscriptionRow, 'id' | 'created_at' | 'last_used_at'> &
@@ -183,6 +235,8 @@ export type TaskUpsert = Omit<TaskRow, 'server_updated_at'>;
 export type CategoryUpsert = Omit<CategoryRow, 'server_updated_at'>;
 export type TagUpsert = Omit<TagRow, 'server_updated_at'>;
 export type FocusSessionUpsert = Omit<FocusSessionRow, 'server_updated_at'>;
+export type SubjectUpsert = Omit<SubjectRow, 'server_updated_at'>;
+export type ScheduleBlockUpsert = Omit<ScheduleBlockRow, 'server_updated_at'>;
 
 /** Nombre de tabla remota para cada tipo de entidad de la cola de salida. */
 export const TABLE_FOR_ENTITY = {
@@ -190,4 +244,6 @@ export const TABLE_FOR_ENTITY = {
   category: 'categories',
   tag: 'tags',
   focusSession: 'focus_sessions',
+  subject: 'subjects',
+  scheduleBlock: 'schedule_blocks',
 } as const;

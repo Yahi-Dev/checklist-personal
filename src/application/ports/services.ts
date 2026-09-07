@@ -207,3 +207,39 @@ export interface KeyValueStore {
   remove(key: string): Promise<void>;
   clear(): Promise<void>;
 }
+
+// --- Documentos ------------------------------------------------------------
+
+/**
+ * Un fragmento de texto de un PDF, con su posicion en la pagina.
+ *
+ * Las coordenadas NO son un extra: son el dato principal. El horario de la universidad
+ * es una tabla donde la fila dice que asignatura es y la columna dice que dia, y en un
+ * PDF esa rejilla no existe en ninguna parte -no hay celdas, solo trozos de texto
+ * sueltos con un `x` y un `y`-. Un extractor que devolviera `string[]` tiraria justo la
+ * informacion que distingue el lunes del jueves.
+ *
+ * El origen es el del PDF: `x` crece hacia la derecha, `y` crece hacia ARRIBA, y ambos
+ * van en puntos tipograficos (1/72 de pulgada) sobre una pagina que suele medir
+ * 612x792.
+ */
+export interface PdfTextItem {
+  readonly text: string;
+  /** Pagina, empezando en 1. */
+  readonly page: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Extrae el texto posicionado de un PDF.
+ *
+ * Vive como puerto para que el parser del horario, que es donde esta toda la logica
+ * fragil, se pueda probar con un array de fragmentos escrito a mano: sin navegador, sin
+ * worker y sin arrastrar un megabyte de pdfjs a la suite de pruebas.
+ */
+export interface PdfTextExtractor {
+  extract(bytes: Uint8Array): Promise<Result<readonly PdfTextItem[]>>;
+}

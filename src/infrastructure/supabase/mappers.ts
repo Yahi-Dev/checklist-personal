@@ -6,14 +6,27 @@ import type {
   FocusSessionRow,
   FocusSessionUpsert,
   Json,
+  ScheduleBlockRow,
+  ScheduleBlockUpsert,
+  SubjectRow,
+  SubjectUpsert,
   TagRow,
   TagUpsert,
   TaskRow,
   TaskUpsert,
 } from './database.types';
-import type { CategoryId, TagId, TaskId, UserId } from '../../domain/shared/branded';
+import type {
+  CategoryId,
+  ScheduleBlockId,
+  SubjectId,
+  TagId,
+  TaskId,
+  UserId,
+} from '../../domain/shared/branded';
 import type { FocusSession } from '../../domain/focus/focus-session';
-import type { RecurrenceRule } from '../../domain/recurrence/recurrence-rule';
+import type { RecurrenceRule, Weekday } from '../../domain/recurrence/recurrence-rule';
+import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
+import type { Subject } from '../../domain/schedule/subject';
 import type { Subtask } from '../../domain/task/subtask';
 import type { Tag } from '../../domain/tag/tag';
 import type { Task, TaskLocation } from '../../domain/task/task';
@@ -176,6 +189,85 @@ export const rowToFocusSession = (row: FocusSessionRow): FocusSession => ({
 });
 
 // ---------------------------------------------------------------------------
+// Horario academico
+// ---------------------------------------------------------------------------
+
+export const subjectToRow = (subject: Subject): SubjectUpsert => ({
+  id: subject.id,
+  user_id: subject.userId,
+  code: subject.code,
+  name: subject.name,
+  section: subject.section,
+  credits: subject.credits,
+  teacher_code: subject.teacherCode,
+  teacher_name: subject.teacherName,
+  color: subject.color,
+  term_code: subject.termCode,
+  starts_on: subject.startsOn,
+  ends_on: subject.endsOn,
+  position: subject.position,
+  created_at: subject.createdAt,
+  updated_at: subject.updatedAt,
+  deleted_at: subject.deletedAt,
+});
+
+export const rowToSubject = (row: SubjectRow): Subject => ({
+  id: brandId<SubjectId>(row.id),
+  userId: brandId<UserId>(row.user_id),
+  code: row.code,
+  name: row.name,
+  section: row.section,
+  credits: row.credits,
+  teacherCode: row.teacher_code,
+  teacherName: row.teacher_name,
+  color: row.color,
+  termCode: row.term_code,
+  /* `starts_on` es `date`, no `timestamptz`: ya viene como `AAAA-MM-DD` y pasarlo por
+     `normalizeTimestamp` lo convertiria en un instante UTC y le restaria un dia a
+     cualquiera que este al oeste de Greenwich. */
+  startsOn: row.starts_on,
+  endsOn: row.ends_on,
+  position: row.position,
+  createdAt: normalizeTimestamp(row.created_at) ?? row.created_at,
+  updatedAt: normalizeTimestamp(row.updated_at) ?? row.updated_at,
+  deletedAt: normalizeTimestamp(row.deleted_at),
+});
+
+export const scheduleBlockToRow = (block: ScheduleBlock): ScheduleBlockUpsert => ({
+  id: block.id,
+  user_id: block.userId,
+  subject_id: block.subjectId,
+  weekday: block.weekday,
+  starts_at: block.startsAt,
+  ends_at: block.endsAt,
+  modality: block.modality,
+  location_label: block.locationLabel,
+  is_remote: block.isRemote,
+  starts_on: block.startsOn,
+  ends_on: block.endsOn,
+  created_at: block.createdAt,
+  updated_at: block.updatedAt,
+  deleted_at: block.deletedAt,
+});
+
+export const rowToScheduleBlock = (row: ScheduleBlockRow): ScheduleBlock => ({
+  id: brandId<ScheduleBlockId>(row.id),
+  userId: brandId<UserId>(row.user_id),
+  subjectId: brandId<SubjectId>(row.subject_id),
+  weekday: asWeekday(row.weekday),
+  startsAt: row.starts_at,
+  endsAt: row.ends_at,
+  modality: row.modality,
+  locationLabel: row.location_label,
+  isRemote: row.is_remote,
+  startsOn: row.starts_on,
+  endsOn: row.ends_on,
+  createdAt: normalizeTimestamp(row.created_at) ?? row.created_at,
+  updatedAt: normalizeTimestamp(row.updated_at) ?? row.updated_at,
+  deletedAt: normalizeTimestamp(row.deleted_at),
+});
+
+// ---------------------------------------------------------------------------
 // Auxiliares
 // ---------------------------------------------------------------------------
 
@@ -190,6 +282,14 @@ const normalizeTimestamp = (value: string | null): string | null => {
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
 };
+
+/**
+ * La columna lleva un `check (weekday between 0 and 6)`, pero eso lo garantiza el
+ * servidor, no el compilador. Se acota igualmente al entrar: una fila corrupta debe
+ * caer en un dia valido, no dejar un `Weekday` imposible circulando por el dominio.
+ */
+const asWeekday = (value: number): Weekday =>
+  Math.min(6, Math.max(0, Math.trunc(value))) as Weekday;
 
 const asArray = <T>(value: Json): T[] => (Array.isArray(value) ? (value as T[]) : []);
 

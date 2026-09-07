@@ -49,6 +49,23 @@ base de datos.
 - Calendario en vista mes o semana; al pulsar un día, la captura rápida queda anclada a esa fecha.
 - Sincronización entre dispositivos, con resolución de conflictos y funcionamiento sin conexión.
 
+**Horario de la universidad**
+
+- Sueltas el PDF que descargas del portal (**HORARIO DE ESTUDIANTES** de UNIBE) y sale el
+  horario entero: asignaturas, secciones, créditos, profesor, aula, modalidad y las fechas
+  del cuatrimestre. No hay que escribir nada.
+- Se lee **la tabla, no el texto**. En un PDF no hay celdas: solo trozos de texto con una
+  coordenada. La `y` dice de qué asignatura es cada dato y la `x` de qué día, y sin esa
+  segunda coordenada el lunes y el jueves se mezclan sin que nada falle. También resuelve
+  las segundas páginas, que no repiten la cabecera de días.
+- Cada cuatrimestre traes el PDF nuevo y **se reconcilia**, no se duplica: casa por
+  `(cuatrimestre, código, sección)` y `(asignatura, día, hora)`, conserva los colores que
+  hayas elegido, actualiza los cambios de aula y da de baja lo que ya no está. Antes de
+  escribir nada te enseña el recuento.
+- Vista por días con línea de tiempo: hora de entrada y de salida, aula (`Edif. FR1 ·
+Aula 305`) o clase virtual, los huecos entre clases (`4h libre`) y la que está en curso.
+- Los cuatrimestres anteriores se guardan, así que el histórico queda consultable.
+
 **Asistente de priorización (con Claude)**
 
 - Un chat que responde a "¿por dónde empiezo?". Ve tus tareas atrasadas, las de hoy y las
@@ -75,11 +92,12 @@ base de datos.
 
 **Lo que NO hace, y por qué**
 
-| Pedido                                     | Estado                                       | Motivo                                                                                                                                                       |
-| ------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Recordatorios por ubicación                | El modelo de datos lo soporta; no se dispara | Ningún navegador permite geolocalización en segundo plano. `watchPosition` se detiene al pasar la pestaña a segundo plano. Requeriría una app nativa de iOS. |
-| Widget en la pantalla de inicio del iPhone | No disponible                                | Los widgets de iOS exigen una extensión en Swift dentro de una app nativa. Una PWA no puede declararlos.                                                     |
-| Integración con Google Calendar            | No incluido                                  | Necesita OAuth con pantalla de consentimiento verificada por Google. Se puede añadir después sobre el puerto `SyncService`.                                  |
+| Pedido                                     | Estado                                       | Motivo                                                                                                                                                                            |
+| ------------------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recordatorios por ubicación                | El modelo de datos lo soporta; no se dispara | Ningún navegador permite geolocalización en segundo plano. `watchPosition` se detiene al pasar la pestaña a segundo plano. Requeriría una app nativa de iOS.                      |
+| Widget en la pantalla de inicio del iPhone | No disponible                                | Los widgets de iOS exigen una extensión en Swift dentro de una app nativa. Una PWA no puede declararlos.                                                                          |
+| Integración con Google Calendar            | No incluido                                  | Necesita OAuth con pantalla de consentimiento verificada por Google. Se puede añadir después sobre el puerto `SyncService`.                                                       |
+| Horarios de otras universidades            | Solo UNIBE                                   | El parser está escrito contra la rejilla concreta de ese informe. Otro formato necesita otro parser; el puerto `PdfTextExtractor` y el resto del módulo se reaprovechan tal cual. |
 
 ---
 
@@ -292,6 +310,16 @@ separadas, guardar una tarea son tres escrituras que pueden sincronizarse por se
 aparece el estado "llegó la subtarea pero no su tarea padre". Una fila por agregado hace
 que cada operación de sincronización sea atómica por construcción.
 
+**El horario se lee con las coordenadas del PDF, y pdfjs no se descarga al arrancar.**
+El parser recibe fragmentos de texto con posición (`PdfTextItem`) a través de un puerto, no
+un PDF: así toda la lógica frágil se prueba contra los documentos reales sin navegador ni
+worker. Y pdfjs —más de un megabyte para algo que se usa una vez por cuatrimestre— entra
+por `import()` dinámico, queda fuera del precache del service worker y se guarda al usarlo
+con una ruta `CacheFirst`, de modo que la importación sigue funcionando sin conexión sin
+duplicar la descarga de instalación de la PWA. El worker de pdfjs se carga en el hilo
+principal a propósito: en Electron la app se sirve por `file://`, cuyo origen es opaco, y
+Chromium no deja construir un `Worker` desde ahí.
+
 **Dos columnas de tiempo: `updated_at` y `server_updated_at`.**
 La primera la escribe el cliente y resuelve conflictos (gana la más reciente). La segunda
 la escribe un trigger con la hora del servidor y es la marca de agua para bajar cambios.
@@ -399,10 +427,10 @@ pnpm test
 
 ```
 electron/          Proceso principal y preload (contextIsolation, sin nodeIntegration)
-scripts/           Compilación de Electron, generación de iconos y llaves VAPID
+scripts/           Compilación de Electron, iconos, llaves VAPID y fixtures del horario
 src/               Aplicación (ver Arquitectura)
 supabase/
-  migrations/      Esquema, RLS, Storage y recordatorios push
+  migrations/      Esquema, RLS, Storage, recordatorios push y horario academico
   functions/
     dispatch-reminders/  Envía las notificaciones push
     advisor/             Proxy del asistente (guarda la clave de Anthropic)

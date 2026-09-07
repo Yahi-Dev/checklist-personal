@@ -3,6 +3,7 @@ import {
   CalendarCheck,
   CalendarDays,
   CheckSquare,
+  GraduationCap,
   Inbox,
   Search,
   Settings,
@@ -36,28 +37,42 @@ interface NavigationEntry {
   to: string;
   label: string;
   icon: typeof Inbox;
-  /** Si aparece en la barra inferior del movil (solo caben cinco). */
+  /** Si aparece en la barra inferior del movil. */
   primary: boolean;
+  /** Version corta para la barra del movil, donde cada destino tiene ~60px. */
+  shortLabel?: string;
 }
 
 /**
- * En la barra inferior del movil solo caben cinco destinos, asi que cada uno que entra
- * saca a otro. El asistente entra y el calendario pasa a la lateral: la pregunta "¿por
- * donde empiezo?" se hace varias veces al dia y desde el telefono, mientras que la
- * vista de mes se consulta de vez en cuando y casi siempre sentado.
+ * Que destinos viven en la barra del movil.
+ *
+ * SEIS, y el orden de esta lista es el orden en que salen. No es una cifra tecnica: la
+ * pildora deslizante se dimensiona sola a partir de `PRIMARY_NAVIGATION.length`, asi que
+ * el limite real es cuanto texto cabe bajo un icono en una pantalla de telefono. A seis
+ * quedan unos 60px por destino, que es justo lo que aguanta una palabra corta; de ahi
+ * `shortLabel` para "Estadisticas", que no cabe entera.
+ *
+ * El reparto responde a con que frecuencia se abre cada pantalla DESDE EL TELEFONO. El
+ * horario entra porque se consulta a diario y de pie; el asistente y la busqueda salen
+ * porque se usan sentado, con la app de escritorio delante.
  */
 const NAVIGATION: readonly NavigationEntry[] = [
   { to: '/hoy', label: 'Hoy', icon: CheckSquare, primary: true },
-  { to: '/asistente', label: 'Asistente', icon: Sparkles, primary: true },
+  { to: '/horario', label: 'Horario', icon: GraduationCap, primary: true },
   { to: '/proximas', label: 'Proximas', icon: Inbox, primary: true },
-  { to: '/buscar', label: 'Buscar', icon: Search, primary: true },
-  { to: '/calendario', label: 'Calendario', icon: CalendarDays, primary: false },
-  // Secundaria y no en la barra inferior: se consulta -al cerrar la semana, al pasar un
-  // reporte-, no se vive en ella. La barra movil solo tiene sitio para lo del dia a dia.
+  { to: '/calendario', label: 'Calendario', icon: CalendarDays, primary: true },
+  {
+    to: '/estadisticas',
+    label: 'Estadisticas',
+    icon: BarChart3,
+    primary: true,
+    shortLabel: 'Datos',
+  },
+  { to: '/ajustes', label: 'Ajustes', icon: Settings, primary: true },
+  { to: '/asistente', label: 'Asistente', icon: Sparkles, primary: false },
+  { to: '/buscar', label: 'Buscar', icon: Search, primary: false },
   { to: '/completadas', label: 'Completadas', icon: CalendarCheck, primary: false },
   { to: '/enfoque', label: 'Enfoque', icon: Timer, primary: false },
-  { to: '/estadisticas', label: 'Estadisticas', icon: BarChart3, primary: false },
-  { to: '/ajustes', label: 'Ajustes', icon: Settings, primary: true },
 ];
 
 const PRIMARY_NAVIGATION = NAVIGATION.filter((entry) => entry.primary);
@@ -97,7 +112,7 @@ export const AppShell = () => {
         )}
       >
         <div className="drag-region flex items-center gap-2.5 px-5 pt-6 pb-4">
-          <div className="bg-brand-gradient flex size-8 items-center justify-center rounded-xl text-white shadow-soft">
+          <div className="flex size-8 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-soft">
             <CheckSquare className="size-4.5" strokeWidth={2.5} />
           </div>
           <span className="text-sm font-semibold tracking-tight text-ink">Checklist</span>
@@ -175,9 +190,10 @@ export const AppShell = () => {
         aria-label="Navegacion principal"
       >
         <div className="relative flex items-stretch justify-around">
-          {/* La pildora deslizante. Ocupa exactamente un quinto y viaja por transform,
-              que anima en el compositor sin relayout. Decorativa: los lectores de
-              pantalla ya tienen aria-current en el NavLink activo. */}
+          {/* La pildora deslizante. Ocupa exactamente una fraccion -calculada a partir
+              del numero de destinos, no fijada a mano- y viaja por transform, que anima
+              en el compositor sin relayout. Decorativa: los lectores de pantalla ya
+              tienen aria-current en el NavLink activo. */}
           {activeMobileIndex >= 0 && (
             <span
               className="pointer-events-none absolute inset-y-0 left-0 transition-transform duration-300 ease-spring"
@@ -197,7 +213,7 @@ export const AppShell = () => {
               to={entry.to}
               className={({ isActive }) =>
                 cn(
-                  'relative flex flex-1 flex-col items-center gap-0.5 py-2.5',
+                  'relative flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-2.5',
                   'text-[10px] font-medium transition-colors duration-200',
                   isActive ? 'text-brand-600 dark:text-brand-300' : 'text-ink-muted',
                 )
@@ -224,7 +240,7 @@ export const AppShell = () => {
                       </span>
                     )}
                   </span>
-                  {entry.label}
+                  <span className="max-w-full truncate">{entry.shortLabel ?? entry.label}</span>
                 </>
               )}
             </NavLink>

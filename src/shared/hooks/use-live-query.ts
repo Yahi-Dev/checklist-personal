@@ -3,6 +3,8 @@ import { useMemo } from 'react';
 
 import type { Category } from '../../domain/category/category';
 import type { FocusSession } from '../../domain/focus/focus-session';
+import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
+import type { Subject } from '../../domain/schedule/subject';
 import type { Tag } from '../../domain/tag/tag';
 import type { Task } from '../../domain/task/task';
 import type { TaskId } from '../../domain/shared/branded';
@@ -100,6 +102,48 @@ export const useActiveFocusSession = (): FocusSession | null | undefined =>
     return open[0] ?? null;
   }, []);
 
+export const useSubjects = (termCode?: string): Subject[] | undefined =>
+  useLiveQuery(
+    async () => {
+      const records =
+        termCode === undefined
+          ? await db.subjects.where('_deleted').equals(0).toArray()
+          : await db.subjects.where('[_deleted+termCode]').equals([0, termCode]).toArray();
+
+      return records
+        .map((record) => stripHints<Subject>(record))
+        .sort(
+          (a, b) =>
+            b.termCode.localeCompare(a.termCode, 'es') ||
+            a.position - b.position ||
+            a.code.localeCompare(b.code, 'es'),
+        );
+    },
+    [termCode],
+    undefined,
+  );
+
+export const useScheduleBlocks = (weekday?: number): ScheduleBlock[] | undefined =>
+  useLiveQuery(
+    async () => {
+      const records =
+        weekday === undefined
+          ? await db.scheduleBlocks.where('_deleted').equals(0).toArray()
+          : await db.scheduleBlocks.where('[_deleted+weekday]').equals([0, weekday]).toArray();
+
+      return records
+        .map((record) => stripHints<ScheduleBlock>(record))
+        .sort(
+          (a, b) =>
+            a.weekday - b.weekday ||
+            a.startsAt.localeCompare(b.startsAt) ||
+            a.id.localeCompare(b.id),
+        );
+    },
+    [weekday],
+    undefined,
+  );
+
 /**
  * Cuantos cambios siguen en camino a la nube.
  *
@@ -126,4 +170,13 @@ export const useTagIndex = (): Map<string, Tag> => {
   const tags = useTags();
 
   return useMemo(() => new Map((tags ?? []).map((tag) => [tag.id as string, tag])), [tags]);
+};
+
+export const useSubjectIndex = (termCode?: string): Map<string, Subject> => {
+  const subjects = useSubjects(termCode);
+
+  return useMemo(
+    () => new Map((subjects ?? []).map((subject) => [subject.id as string, subject])),
+    [subjects],
+  );
 };

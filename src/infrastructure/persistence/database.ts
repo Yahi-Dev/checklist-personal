@@ -4,6 +4,8 @@ import type {
   CategoryRecord,
   FocusSessionRecord,
   OutboxEntry,
+  ScheduleBlockRecord,
+  SubjectRecord,
   SyncMetaRecord,
   TagRecord,
   TaskRecord,
@@ -25,6 +27,8 @@ export class AppDatabase extends Dexie {
   declare categories: Table<CategoryRecord, string>;
   declare tags: Table<TagRecord, string>;
   declare focusSessions: Table<FocusSessionRecord, string>;
+  declare subjects: Table<SubjectRecord, string>;
+  declare scheduleBlocks: Table<ScheduleBlockRecord, string>;
   declare outbox: Table<OutboxEntry, number>;
   declare meta: Table<SyncMetaRecord, string>;
 
@@ -72,19 +76,50 @@ export class AppDatabase extends Dexie {
     this.version(2).stores({
       outbox: '++seq, entity, entityId, [entity+entityId], createdAt, attempts, [attempts+seq]',
     });
+
+    /**
+     * v3: el horario academico.
+     *
+     * Solo se declaran las dos tablas NUEVAS. Dexie hereda el resto de la version
+     * anterior, igual que hizo la v2 con la cola de salida; tocar el `version(1)` de
+     * arriba romperia la migracion de las bases ya instaladas en los dispositivos.
+     *
+     * Los indices compuestos salen de las dos consultas reales de la pantalla:
+     * "las asignaturas de este cuatrimestre" y "los tramos de este dia", ambas
+     * descartando lo borrado. Sin el `_deleted` dentro, cada consulta tendria que
+     * traerse tambien las bajas para filtrarlas en memoria.
+     */
+    this.version(3).stores({
+      subjects: 'id, code, termCode, updatedAt, _deleted, _dirty, [_deleted+termCode]',
+
+      scheduleBlocks:
+        'id, subjectId, weekday, startsAt, updatedAt, _deleted, _dirty, ' +
+        '[_deleted+subjectId], [_deleted+weekday]',
+    });
   }
 
   /** Vacia todo. Solo lo usa el cierre de sesion y la resincronizacion completa. */
   async wipe(): Promise<void> {
     await this.transaction(
       'rw',
-      [this.tasks, this.categories, this.tags, this.focusSessions, this.outbox, this.meta],
+      [
+        this.tasks,
+        this.categories,
+        this.tags,
+        this.focusSessions,
+        this.subjects,
+        this.scheduleBlocks,
+        this.outbox,
+        this.meta,
+      ],
       async () => {
         await Promise.all([
           this.tasks.clear(),
           this.categories.clear(),
           this.tags.clear(),
           this.focusSessions.clear(),
+          this.subjects.clear(),
+          this.scheduleBlocks.clear(),
           this.outbox.clear(),
           this.meta.clear(),
         ]);

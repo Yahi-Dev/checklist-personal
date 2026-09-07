@@ -3,12 +3,15 @@ import type {
   CategoryRepository,
   CurrentUser,
   FocusSessionRepository,
+  ScheduleBlockRepository,
+  SubjectRepository,
   TagRepository,
   TaskRepository,
 } from '../ports/repositories';
 import type {
   FileStorageService,
   NotificationService,
+  PdfTextExtractor,
   PlanningAdvisorService,
   PlatformService,
 } from '../ports/services';
@@ -46,6 +49,8 @@ export interface UseCaseContext {
   readonly categories: CategoryRepository;
   readonly tags: TagRepository;
   readonly focusSessions: FocusSessionRepository;
+  readonly subjects: SubjectRepository;
+  readonly scheduleBlocks: ScheduleBlockRepository;
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly notifications: NotificationService;
@@ -53,6 +58,7 @@ export interface UseCaseContext {
   readonly files: FileStorageService;
   readonly platform: PlatformService;
   readonly advisor: PlanningAdvisorService;
+  readonly pdf: PdfTextExtractor;
   readonly currentUser: () => CurrentUser | null;
 }
 

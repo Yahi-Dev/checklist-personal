@@ -65,6 +65,16 @@ export default defineConfig(({ mode }) => {
               injectManifest: {
                 globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
                 maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+                /* pdfjs pesa mas que TODO el resto de la app junta y solo se usa al
+                   importar el horario, una vez por cuatrimestre. Precachearlo doblaria
+                   la descarga de instalacion de la PWA en el telefono -y el riesgo de
+                   que esa instalacion falle a medias- por una funcion que la mayoria de
+                   los dias no se toca.
+
+                   No queda fuera del alcance sin conexion: `sw.ts` le pone una ruta
+                   `CacheFirst`, asi que la primera importacion lo descarga y a partir
+                   de ahi funciona igual en modo avion. */
+                globIgnores: ['**/assets/pdfjs-*.js'],
               },
               devOptions: {
                 enabled: false,
@@ -123,9 +133,27 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: mode !== 'production',
-      chunkSizeWarningLimit: 900,
+      /* 900 era el limite razonable hasta que entro pdfjs, que pasa del megabyte el
+         solo. Se sube para que su aviso no tape los que si importan; el resto de trozos
+         sigue estando muy por debajo. */
+      chunkSizeWarningLimit: 1600,
       rollupOptions: {
         output: {
+          /**
+           * pdfjs sale con nombre propio, y NO con `manualChunks`.
+           *
+           * La diferencia parece cosmetica y no lo es. Un trozo declarado en
+           * `manualChunks` se considera compartido y Vite le pone un
+           * `<link rel="modulepreload">` en el index.html: el arranque se traia 1,7 MB
+           * de pdfjs ANTES de pintar nada, precisamente lo contrario de lo que buscaba
+           * el `import()` dinamico. Dejandolo salir como trozo asincrono normal y solo
+           * renombrandolo aqui, no hay preload y el nombre sigue siendo predecible, que
+           * es lo que necesitan `globIgnores` y la ruta de cache del service worker.
+           */
+          chunkFileNames: (chunk) => {
+            const isPdfjs = chunk.moduleIds.some((id) => id.includes('pdfjs-dist'));
+            return isPdfjs ? 'assets/pdfjs-[hash].js' : 'assets/[name]-[hash].js';
+          },
           /* Separar los vendors pesados evita invalidar todo el cache en cada deploy:
              cambiar una linea de la app no deberia obligar al telefono a volver a
              descargar React entero.
