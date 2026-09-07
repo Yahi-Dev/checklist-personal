@@ -14,6 +14,8 @@ import {
   SeedDefaultCategoriesUseCase,
 } from '../../src/application/use-cases/category/category-commands';
 import { createTestHarness } from '../support/test-context';
+import { HORARIO_2027_1 } from '../support/unibe-schedule-fixture';
+import { ImportSchedulePdfUseCase } from '../../src/application/use-cases/schedule/import-schedule-pdf';
 
 /**
  * El usuario ficticio con el que firma todo el modo local.
@@ -52,6 +54,36 @@ describe('AdoptLocalDataUseCase', () => {
 
   const adopt = () =>
     new AdoptLocalDataUseCase(harness.context).execute({ previousUserId: LOCAL_USER });
+
+  it('adopta tambien el horario importado sin cuenta', async () => {
+    // Sin este bloque, un horario importado en modo local se queda con el dueño ficticio
+    // y las politicas de seguridad de Supabase lo rechazan fila por fila para siempre en
+    // cuanto hay sesion. Es el mismo agujero que motivo este caso de uso, aplicado al
+    // horario.
+    harness.pdf.setItems(HORARIO_2027_1);
+    await new ImportSchedulePdfUseCase(harness.context).execute({
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+
+    for (const subject of [...harness.subjects.items.values()]) {
+      await harness.subjects.save({ ...subject, userId: LOCAL_USER });
+    }
+    for (const block of [...harness.scheduleBlocks.items.values()]) {
+      await harness.scheduleBlocks.save({ ...block, userId: LOCAL_USER });
+    }
+
+    const result = unwrap(await adopt());
+
+    expect(result.asignaturas).toBe(6);
+    expect(result.clases).toBe(8);
+
+    for (const subject of harness.subjects.items.values()) {
+      expect(subject.userId).toBe(CLOUD_USER.id);
+    }
+    for (const block of harness.scheduleBlocks.items.values()) {
+      expect(block.userId).toBe(CLOUD_USER.id);
+    }
+  });
 
   it('le cambia el dueño a las tareas creadas sin cuenta', async () => {
     await createdInLocalMode(['llamar a oriel', 'buscar empleo', 'actualizar mi LinkedIn']);

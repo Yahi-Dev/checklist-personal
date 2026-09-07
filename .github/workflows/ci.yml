@@ -107,8 +107,13 @@ jobs:
         # Red de seguridad barata contra la clase de fallo de arriba: si los secretos
         # faltaran, el .exe compilaria igual y el problema no se veria hasta que alguien
         # perdiera datos. Aqui se cae el build en su lugar.
+        #
+        # Se mira `app.asar` y NO los `.exe`. Los instaladores van comprimidos con LZMA,
+        # asi que ninguna cadena del programa aparece en sus bytes: el `grep` sobre ellos
+        # solo acertaba mientras el paquete fue lo bastante pequeño y empezo a dar falsos
+        # negativos en cuanto crecio. `app.asar` es ademas lo que de verdad se ejecuta.
         run: |
-          if grep -qa "supabase.co" release/*.exe; then
+          if grep -qa "supabase.co" release/win-unpacked/resources/app.asar; then
             echo "OK: el ejecutable lleva las credenciales embebidas."
           else
             echo "FALLO: el .exe se compilo SIN credenciales de Supabase."

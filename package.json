@@ -55,7 +55,8 @@
       "dist-electron/**/*",
       "build/icon.png",
       "build/tray-icon.png",
-      "!**/*.map"
+      "!**/*.map",
+      "!node_modules/pdfjs-dist/**/*"
     ],
     "win": {
       "target": [
