@@ -173,8 +173,8 @@ export class SyncEngine implements SyncService {
     });
   }
 
-  /** Tablas que el servidor no tenia en la pasada actual. Se vacia en cada `runSync`. */
-  private readonly missingTables = new Set<string>();
+  /** Lo que al servidor le faltaba en la pasada actual. Se vacia en cada `runSync`. */
+  private readonly schemaGaps = new Set<string>();
 
   private async runSync(): Promise<Result<SyncState>> {
     const userId = this.getUserId();
@@ -190,7 +190,7 @@ export class SyncEngine implements SyncService {
     }
 
     this.publish({ status: 'syncing', lastError: null });
-    this.missingTables.clear();
+    this.schemaGaps.clear();
 
     /**
      * SUBIDA Y BAJADA SON INDEPENDIENTES.
@@ -254,19 +254,18 @@ export class SyncEngine implements SyncService {
     await this.database.setMeta(SYNC_META_KEYS.lastSyncedAt, now);
 
     /**
-     * Faltar una tabla NO es un error de sincronizacion.
+     * Que al servidor le falte parte del esquema NO es un error de sincronizacion.
      *
-     * Todo lo demas subio y bajo bien, y lo de esa tabla sigue en la cola esperando, que
+     * Todo lo demas subio y bajo bien, y lo que no pudo sigue en la cola esperando, que
      * es exactamente lo correcto. Pintar el indicador en rojo por esto hacia creer que
      * las tareas tampoco se estaban guardando, que es justo lo contrario de lo que
-     * pasaba. Se deja el estado en verde y se explica el motivo, nombrando el archivo
-     * que hay que pegar.
+     * pasaba. Se deja el estado en verde y se explica que falta y donde se arregla.
      */
     const pendingSchema =
-      this.missingTables.size === 0
+      this.schemaGaps.size === 0
         ? null
-        : `Falta crear en Supabase ${[...this.missingTables].join(' y ')}. ` +
-          'Pega supabase/PEGAR-EN-SUPABASE-horario.sql en el editor SQL del panel.';
+        : `Falta actualizar el esquema de Supabase: ${[...this.schemaGaps].join(', ')}. ` +
+          'Pega en el editor SQL del panel los archivos supabase/PEGAR-EN-SUPABASE-*.sql que falten.';
 
     this.publish({ status: 'idle', lastSyncedAt: now, lastError: pendingSchema, ...queue });
 
@@ -451,8 +450,8 @@ export class SyncEngine implements SyncService {
       try {
         await this.pushGroup(entity, group);
       } catch (cause) {
-        if (cause instanceof MissingRemoteTable) {
-          this.missingTables.add(cause.table);
+        if (cause instanceof RemoteSchemaBehind) {
+          this.schemaGaps.add(cause.missing);
           continue;
         }
         failures.push(toDomainError(cause, `No se pudo subir ${entity}.`).message);
@@ -525,12 +524,20 @@ export class SyncEngine implements SyncService {
 
     if (error === null) return;
 
-    /* Antes de nada: si la tabla no existe, ni es una fila mala ni se arregla
-       reintentando. Se avisa hacia arriba con su propio tipo para que la cola quede
-       intacta -esas operaciones son validas y subiran en cuanto exista la tabla- y para
-       que no gasten intentos hasta quedar marcadas como atascadas. */
+    /* Antes de nada: si al servidor le falta la tabla o la columna, ni es una fila mala
+       ni se arregla reintentando. Se avisa hacia arriba con su propio tipo, y lanzar aqui
+       sale de `pushGroup` ANTES de `recordFailures`: la cola queda intacta, sin gastar
+       intentos, y esas operaciones subiran solas en cuanto se pegue el SQL. */
     if (isMissingTable(error.code)) {
-      throw new MissingRemoteTable(TABLE_FOR_ENTITY[entity]);
+      throw new RemoteSchemaBehind(`la tabla "${TABLE_FOR_ENTITY[entity]}"`);
+    }
+
+    if (isMissingColumn(error.code)) {
+      /* El mensaje del servidor nombra la columna; se conserva entero porque es lo unico
+         que permite saber QUE falta sin mirar el codigo. */
+      throw new RemoteSchemaBehind(
+        `una columna de "${TABLE_FOR_ENTITY[entity]}" (${error.message})`,
+      );
     }
 
     if (!isRowRejection(error.code)) {
@@ -640,8 +647,8 @@ export class SyncEngine implements SyncService {
     try {
       await this.pullEntity(entity, userId, fetch);
     } catch (cause) {
-      if (cause instanceof MissingRemoteTable) {
-        this.missingTables.add(cause.table);
+      if (cause instanceof RemoteSchemaBehind) {
+        this.schemaGaps.add(cause.missing);
         return;
       }
       throw cause;
@@ -707,7 +714,10 @@ export class SyncEngine implements SyncService {
         .order('id', { ascending: true })
         .range(offset, offset + appConfig.sync.pageSize - 1);
 
-      if (error !== null) throw new Error(`Fallo al bajar tareas: ${error.message}`);
+      if (error !== null) {
+        if (isMissingTable(error.code)) throw new RemoteSchemaBehind('la tabla "tasks"');
+        throw new Error(`Fallo al bajar tareas: ${error.message}`);
+      }
       if (data === null || data.length === 0) break;
 
       for (const row of data as TaskRow[]) {
@@ -731,7 +741,10 @@ export class SyncEngine implements SyncService {
       .gt('server_updated_at', since)
       .order('server_updated_at', { ascending: true });
 
-    if (error !== null) throw new Error(`Fallo al bajar categorias: ${error.message}`);
+    if (error !== null) {
+      if (isMissingTable(error.code)) throw new RemoteSchemaBehind('la tabla "categories"');
+      throw new Error(`Fallo al bajar categorias: ${error.message}`);
+    }
 
     let watermark = since;
 
@@ -758,7 +771,10 @@ export class SyncEngine implements SyncService {
       .gt('server_updated_at', since)
       .order('server_updated_at', { ascending: true });
 
-    if (error !== null) throw new Error(`Fallo al bajar etiquetas: ${error.message}`);
+    if (error !== null) {
+      if (isMissingTable(error.code)) throw new RemoteSchemaBehind('la tabla "tags"');
+      throw new Error(`Fallo al bajar etiquetas: ${error.message}`);
+    }
 
     let watermark = since;
 
@@ -779,7 +795,10 @@ export class SyncEngine implements SyncService {
       .gt('server_updated_at', since)
       .order('server_updated_at', { ascending: true });
 
-    if (error !== null) throw new Error(`Fallo al bajar sesiones: ${error.message}`);
+    if (error !== null) {
+      if (isMissingTable(error.code)) throw new RemoteSchemaBehind('la tabla "focus_sessions"');
+      throw new Error(`Fallo al bajar sesiones: ${error.message}`);
+    }
 
     let watermark = since;
 
@@ -807,7 +826,7 @@ export class SyncEngine implements SyncService {
       .order('server_updated_at', { ascending: true });
 
     if (error !== null) {
-      if (isMissingTable(error.code)) throw new MissingRemoteTable('subjects');
+      if (isMissingTable(error.code)) throw new RemoteSchemaBehind('la tabla "subjects"');
       throw new Error(`Fallo al bajar asignaturas: ${error.message}`);
     }
 
@@ -837,7 +856,7 @@ export class SyncEngine implements SyncService {
       .order('server_updated_at', { ascending: true });
 
     if (error !== null) {
-      if (isMissingTable(error.code)) throw new MissingRemoteTable('schedule_blocks');
+      if (isMissingTable(error.code)) throw new RemoteSchemaBehind('la tabla "schedule_blocks"');
       throw new Error(`Fallo al bajar el horario: ${error.message}`);
     }
 
@@ -1148,18 +1167,25 @@ const sinceFor = (cursor: string): string =>
   new Date(Date.parse(cursor) - appConfig.sync.pullOverlapMs).toISOString();
 
 /**
- * El servidor todavia no tiene esa tabla.
+ * El servidor va por detras del cliente: le falta una tabla o una columna.
  *
- * Es un estado NORMAL de esta app, no una averia: la PWA se despliega sola en cada push
+ * Es un estado NORMAL de esta app, no una averia. La PWA se despliega sola en cada push
  * y el esquema de Supabase se aplica a mano, asi que entre una cosa y la otra el cliente
- * conoce tablas que el servidor aun no. Antes eso tumbaba la sincronizacion ENTERA -el
- * indicador en rojo, y el usuario sin saber que sus tareas si estaban subiendo-, cuando
- * lo unico que pasaba es que faltaba pegar un SQL.
+ * conoce partes del esquema que el servidor aun no. Antes eso tumbaba la sincronizacion
+ * ENTERA -el indicador en rojo, y el usuario sin saber que sus tareas si estaban
+ * subiendo-, cuando lo unico que pasaba es que faltaba pegar un SQL.
+ *
+ * LA COLUMNA IMPORTA MAS QUE LA TABLA, aunque parezca lo contrario. Una tabla que falta
+ * solo afecta a la funcion que la estrena. Una COLUMNA que falta afecta a una tabla que
+ * ya esta llena y en uso: si el cliente aprende un campo nuevo de `tasks` antes de que
+ * exista en el servidor, PostgREST rechaza la peticion entera y dejan de subir TODAS las
+ * tareas. Por eso los dos casos se tratan igual y por eso esto se escribio antes de
+ * añadir la primera columna nueva.
  */
-class MissingRemoteTable extends Error {
-  constructor(readonly table: string) {
-    super(`La tabla "${table}" todavia no existe en el servidor.`);
-    this.name = 'MissingRemoteTable';
+class RemoteSchemaBehind extends Error {
+  constructor(readonly missing: string) {
+    super(`El servidor todavia no tiene ${missing}.`);
+    this.name = 'RemoteSchemaBehind';
   }
 }
 
@@ -1169,6 +1195,13 @@ class MissingRemoteTable extends Error {
  */
 const isMissingTable = (code: string | undefined): boolean =>
   code === 'PGRST205' || code === '42P01';
+
+/**
+ * PostgREST no encuentra una columna de las que se le mandan. `PGRST204` es el de su
+ * cache de esquema -"Could not find the 'x' column of 'y'"- y `42703` el de Postgres.
+ */
+const isMissingColumn = (code: string | undefined): boolean =>
+  code === 'PGRST204' || code === '42703';
 
 const isRowRejection = (code: string | undefined): boolean => {
   if (code === undefined || code === '') return false;

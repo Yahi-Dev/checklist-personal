@@ -11,7 +11,7 @@ import { Outbox } from '../../src/infrastructure/persistence/outbox';
 import { pullCursorKey } from '../../src/infrastructure/persistence/records';
 import { SyncEngine } from '../../src/infrastructure/sync/sync-engine';
 import { taskToRow } from '../../src/infrastructure/supabase/mappers';
-import { unwrap } from '../../src/domain/shared/result';
+import { isErr, unwrap } from '../../src/domain/shared/result';
 
 /**
  * Pruebas del motor de sincronizacion contra un servidor FALSO PERO REALISTA.
@@ -51,7 +51,13 @@ const makeTask = (title = 'Tarea') => {
  * de una en una o de rendirse con el lote entero.
  */
 const makeSupabase = (options: {
-  reject?: (row: Record<string, unknown>) => { code: string; message: string } | null;
+  /** Recibe tambien la TABLA: hay fallos que son de la peticion entera, no de la fila. */
+  reject?: (
+    row: Record<string, unknown>,
+    table: string,
+  ) => { code: string; message: string } | null;
+  /** Falla la BAJADA de una tabla concreta, para imitar un esquema incompleto. */
+  selectError?: (table: string) => { code: string; message: string } | null;
   networkError?: boolean;
   rows?: Record<string, Record<string, unknown>[]>;
   /** Se ejecuta con el lote ya enviado y antes de devolver la respuesta: imita la latencia. */
@@ -71,17 +77,23 @@ const makeSupabase = (options: {
           return { error: { code: '', message: 'TypeError: Failed to fetch' } };
         }
 
-        const bad = rows.map((row) => options.reject?.(row) ?? null).find((it) => it !== null);
+        const bad = rows
+          .map((row) => options.reject?.(row, table) ?? null)
+          .find((it) => it !== null);
         return { error: bad ?? null };
       },
       select: () => {
+        const answer = () => ({
+          data: options.rows?.[table] ?? [],
+          error: options.selectError?.(table) ?? null,
+        });
+
         const query = {
           eq: () => query,
           gt: () => query,
           order: () => query,
-          range: () => Promise.resolve({ data: options.rows?.[table] ?? [], error: null }),
-          then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
-            resolve({ data: options.rows?.[table] ?? [], error: null }),
+          range: () => Promise.resolve(answer()),
+          then: (resolve: (value: ReturnType<typeof answer>) => unknown) => resolve(answer()),
         };
         return query;
       },
@@ -423,6 +435,111 @@ describe('SyncEngine', () => {
 
       const guardada = await database.tasks.get(task.id);
       expect(guardada?._dirty).toBe(1);
+    });
+  });
+
+  describe('el servidor va por detras del cliente', () => {
+    /**
+     * El caso que motiva todo este bloque: la PWA se despliega sola en cada push y el SQL
+     * de Supabase se pega a mano, asi que SIEMPRE hay una ventana en la que el cliente
+     * conoce partes del esquema que el servidor aun no.
+     *
+     * Una tabla que falta solo afecta a la funcion que la estrena. Una COLUMNA que falta
+     * afecta a una tabla llena y en uso: PostgREST rechaza la peticion ENTERA, asi que
+     * una columna nueva en `tasks` puede dejar de subir TODAS las tareas.
+     */
+    const columnaQueFalta = (tabla: string) => ({
+      code: 'PGRST204',
+      message: `Could not find the 'campo_nuevo' column of '${tabla}' in the schema cache`,
+    });
+
+    it('una columna que falta no gasta intentos ni saca las filas de la cola', async () => {
+      // Sin esto, cada pasada quemaria un intento de los diez que tiene cada entrada, y
+      // en cinco minutos las tareas quedarian marcadas como atascadas para siempre por un
+      // SQL sin pegar.
+      await tasks.save(makeTask());
+
+      const { client } = makeSupabase({
+        reject: (_row, table) => (table === 'tasks' ? columnaQueFalta('tasks') : null),
+      });
+
+      await engineFor(client).sync();
+      await engineFor(client).sync();
+
+      const pendientes = await outbox.pending();
+      expect(pendientes).toHaveLength(1);
+      expect(pendientes[0]?.attempts).toBe(0);
+      // Sigue contando como pendiente: nada quedo fuera por haber agotado intentos.
+      expect(await outbox.pendingCount()).toBe(1);
+    });
+
+    it('y no impide que suban las demas tablas', async () => {
+      // La categoria y la tarea van en grupos distintos del mismo empujon. Antes, que el
+      // servidor rechazara uno bastaba para dar la pasada por fallida.
+      await outbox.enqueue('category', 'cat-1', 'upsert', { id: 'cat-1' }, NOW);
+      await tasks.save(makeTask());
+
+      const { client, upserts } = makeSupabase({
+        reject: (_row, table) => (table === 'tasks' ? columnaQueFalta('tasks') : null),
+      });
+
+      await engineFor(client).sync();
+
+      expect(upserts.some((entry) => entry.table === 'categories')).toBe(true);
+    });
+
+    it('deja el estado en verde y explica que falta', async () => {
+      // Pintarlo en rojo hacia creer que tampoco se guardaban las tareas, que es justo lo
+      // contrario de lo que pasaba.
+      await tasks.save(makeTask());
+
+      const { client } = makeSupabase({
+        reject: (_row, table) => (table === 'tasks' ? columnaQueFalta('tasks') : null),
+      });
+
+      const estado = unwrap(await engineFor(client).sync());
+
+      expect(estado.status).toBe('idle');
+      expect(estado.blockedOperations).toBe(0);
+      expect(estado.lastError).toMatch(/columna/u);
+      expect(estado.lastError).toMatch(/tasks/u);
+      expect(estado.lastError).toMatch(/PEGAR-EN-SUPABASE/u);
+    });
+
+    it('una tabla que falta en la bajada no corta las siguientes', async () => {
+      // Las categorias se bajan ANTES que las tareas. Antes, la primera tabla ausente
+      // dejaba a medias la cadena y el dispositivo dejaba de recibir todo lo demas.
+      const remota = { ...taskToRow(makeTask('Del servidor')) } as Record<string, unknown>;
+      remota.server_updated_at = '2026-08-04T18:00:00.000Z';
+
+      const { client } = makeSupabase({
+        rows: { tasks: [remota] },
+        selectError: (table) =>
+          table === 'categories'
+            ? { code: 'PGRST205', message: "Could not find the table 'public.categories'" }
+            : null,
+      });
+
+      const estado = unwrap(await engineFor(client).sync());
+
+      expect(await database.tasks.count()).toBe(1);
+      expect(estado.status).toBe('idle');
+      expect(estado.lastError).toMatch(/categories/u);
+    });
+
+    it('un fallo de verdad SI pinta el estado en rojo', async () => {
+      // La tolerancia no puede tragarselo todo: un error que no sea "falta esquema" tiene
+      // que seguir avisando.
+      await tasks.save(makeTask());
+
+      const { client } = makeSupabase({ networkError: true });
+      // El MISMO motor: `engineFor` fabrica uno nuevo cada vez y el estado vive en la
+      // instancia, no en la clase.
+      const engine = engineFor(client);
+      const resultado = await engine.sync();
+
+      expect(isErr(resultado)).toBe(true);
+      expect(engine.getState().status).toBe('error');
     });
   });
 
