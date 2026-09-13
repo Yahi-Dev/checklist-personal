@@ -182,6 +182,7 @@ describe('AdoptLocalDataUseCase', () => {
       asignaturas: 0,
       clases: 0,
       notas: 0,
+      asistencias: 0,
       categoriasDescartadas: 0,
     });
   });

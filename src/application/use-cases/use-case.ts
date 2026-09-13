@@ -1,6 +1,7 @@
 import type { Clock } from '../../domain/shared/clock';
 import type {
   CategoryRepository,
+  ClassAttendanceRepository,
   CurrentUser,
   FocusSessionRepository,
   ScheduleBlockRepository,
@@ -53,6 +54,7 @@ export interface UseCaseContext {
   readonly subjects: SubjectRepository;
   readonly scheduleBlocks: ScheduleBlockRepository;
   readonly subjectNotes: SubjectNoteRepository;
+  readonly attendance: ClassAttendanceRepository;
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly notifications: NotificationService;

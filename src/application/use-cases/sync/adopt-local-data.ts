@@ -116,6 +116,7 @@ export interface AdoptedDataSummary {
   readonly asignaturas: number;
   readonly clases: number;
   readonly notas: number;
+  readonly asistencias: number;
   /** Categorias por defecto intactas que se descartaron en vez de duplicarse. */
   readonly categoriasDescartadas: number;
 }
@@ -253,6 +254,18 @@ export class AdoptLocalDataUseCase implements UseCase<AdoptLocalDataCommand, Ado
       if (isErr(saved)) return saved;
     }
 
+    const attendance = await this.context.attendance.findAll({ includeDeleted: true });
+    if (isErr(attendance)) return attendance;
+
+    const orphanAttendance = attendance.value
+      .filter(isOrphan)
+      .map((record) => ({ ...record, userId: owner.id, updatedAt: now }));
+
+    if (orphanAttendance.length > 0) {
+      const saved = await this.context.attendance.saveMany(orphanAttendance);
+      if (isErr(saved)) return saved;
+    }
+
     return ok({
       tareas: orphanTasks.length,
       categorias: adoptable.length,
@@ -261,6 +274,7 @@ export class AdoptLocalDataUseCase implements UseCase<AdoptLocalDataCommand, Ado
       asignaturas: orphanSubjects.length,
       clases: orphanBlocks.length,
       notas: orphanNotes.length,
+      asistencias: orphanAttendance.length,
       categoriasDescartadas: discardable.length,
     });
   }
@@ -274,6 +288,7 @@ const EMPTY_SUMMARY: AdoptedDataSummary = {
   asignaturas: 0,
   clases: 0,
   notas: 0,
+  asistencias: 0,
   categoriasDescartadas: 0,
 };
 

@@ -4,6 +4,7 @@ import type { FocusSession } from '../../../domain/focus/focus-session';
 import type { Result } from '../../../domain/shared/result';
 import type { ScheduleBlock } from '../../../domain/schedule/schedule-block';
 import type { Subject } from '../../../domain/schedule/subject';
+import type { ClassAttendance } from '../../../domain/schedule/class-attendance';
 import type { SubjectNote } from '../../../domain/schedule/subject-note';
 import type { Tag } from '../../../domain/tag/tag';
 import type { Task } from '../../../domain/task/task';
@@ -24,6 +25,7 @@ export interface ExportBackupResult {
     readonly subjects: number;
     readonly scheduleBlocks: number;
     readonly subjectNotes: number;
+    readonly attendance: number;
   };
 }
 
@@ -43,16 +45,25 @@ export class ExportBackupUseCase implements UseCase<
   async execute({ format = 'json' }: { format?: 'json' | 'csv' } = {}): Promise<
     Result<ExportBackupResult>
   > {
-    const [tasks, categories, tags, focusSessions, subjects, scheduleBlocks, subjectNotes] =
-      await Promise.all([
-        this.context.tasks.findAll({ includeDeleted: true }),
-        this.context.categories.findAll({ includeDeleted: true }),
-        this.context.tags.findAll({ includeDeleted: true }),
-        this.context.focusSessions.findAll(),
-        this.context.subjects.findAll({ includeDeleted: true }),
-        this.context.scheduleBlocks.findAll({ includeDeleted: true }),
-        this.context.subjectNotes.findAll({ includeDeleted: true }),
-      ]);
+    const [
+      tasks,
+      categories,
+      tags,
+      focusSessions,
+      subjects,
+      scheduleBlocks,
+      subjectNotes,
+      attendance,
+    ] = await Promise.all([
+      this.context.tasks.findAll({ includeDeleted: true }),
+      this.context.categories.findAll({ includeDeleted: true }),
+      this.context.tags.findAll({ includeDeleted: true }),
+      this.context.focusSessions.findAll(),
+      this.context.subjects.findAll({ includeDeleted: true }),
+      this.context.scheduleBlocks.findAll({ includeDeleted: true }),
+      this.context.subjectNotes.findAll({ includeDeleted: true }),
+      this.context.attendance.findAll({ includeDeleted: true }),
+    ]);
 
     if (isErr(tasks)) return tasks;
     if (isErr(categories)) return categories;
@@ -61,6 +72,7 @@ export class ExportBackupUseCase implements UseCase<
     if (isErr(subjects)) return subjects;
     if (isErr(scheduleBlocks)) return scheduleBlocks;
     if (isErr(subjectNotes)) return subjectNotes;
+    if (isErr(attendance)) return attendance;
 
     const now = this.context.clock.now();
     const stamp = now.toISOString().slice(0, 10);
@@ -73,6 +85,7 @@ export class ExportBackupUseCase implements UseCase<
       subjects: subjects.value.length,
       scheduleBlocks: scheduleBlocks.value.length,
       subjectNotes: subjectNotes.value.length,
+      attendance: attendance.value.length,
     };
 
     if (format === 'csv') {
@@ -100,6 +113,7 @@ export class ExportBackupUseCase implements UseCase<
         subjects: subjects.value,
         scheduleBlocks: scheduleBlocks.value,
         subjectNotes: subjectNotes.value,
+        attendance: attendance.value,
       },
     };
 
@@ -129,6 +143,7 @@ export interface ImportBackupResult {
     subjects: number;
     scheduleBlocks: number;
     subjectNotes: number;
+    attendance: number;
   };
   readonly skipped: number;
 }
@@ -179,6 +194,9 @@ export class ImportBackupUseCase implements UseCase<ImportBackupCommand, ImportB
     const incomingSubjects = parsed.data.data.subjects.map(stamp) as unknown as Subject[];
     const incomingBlocks = parsed.data.data.scheduleBlocks.map(stamp) as unknown as ScheduleBlock[];
     const incomingNotes = parsed.data.data.subjectNotes.map(stamp) as unknown as SubjectNote[];
+    const incomingAttendance = parsed.data.data.attendance.map(
+      stamp,
+    ) as unknown as ClassAttendance[];
 
     let skipped = 0;
 
@@ -231,6 +249,9 @@ export class ImportBackupUseCase implements UseCase<ImportBackupCommand, ImportB
     const savedNotes = await this.context.subjectNotes.saveMany(incomingNotes);
     if (isErr(savedNotes)) return savedNotes;
 
+    const savedAttendance = await this.context.attendance.saveMany(incomingAttendance);
+    if (isErr(savedAttendance)) return savedAttendance;
+
     await this.context.reminders.rebuildAll();
 
     return ok({
@@ -242,6 +263,7 @@ export class ImportBackupUseCase implements UseCase<ImportBackupCommand, ImportB
         subjects: incomingSubjects.length,
         scheduleBlocks: incomingBlocks.length,
         subjectNotes: incomingNotes.length,
+        attendance: incomingAttendance.length,
       },
       skipped,
     });

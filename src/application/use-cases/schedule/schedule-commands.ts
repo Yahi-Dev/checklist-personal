@@ -108,6 +108,7 @@ export class CreateSubjectUseCase implements UseCase<CreateSubjectCommand, Subje
 export interface UpdateSubjectCommand {
   readonly subjectId: SubjectId;
   readonly attention?: AttentionLevel;
+  readonly maxAbsences?: number | null;
   readonly code?: string;
   readonly name?: string;
   readonly section?: string;

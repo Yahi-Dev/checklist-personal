@@ -4,6 +4,7 @@ import type { Category } from '../../src/domain/category/category';
 import type {
   CategoryId,
   FocusSessionId,
+  ClassAttendanceId,
   ScheduleBlockId,
   SubjectId,
   SubjectNoteId,
@@ -22,6 +23,8 @@ import type {
   CategoryRepository,
   CurrentUser,
   FocusSessionRepository,
+  ClassAttendanceQuery,
+  ClassAttendanceRepository,
   ScheduleBlockQuery,
   ScheduleBlockRepository,
   SubjectNoteQuery,
@@ -35,6 +38,7 @@ import type {
 import type { FocusSession } from '../../src/domain/focus/focus-session';
 import type { Result } from '../../src/domain/shared/result';
 import type { ScheduleBlock } from '../../src/domain/schedule/schedule-block';
+import type { ClassAttendance } from '../../src/domain/schedule/class-attendance';
 import type { Subject } from '../../src/domain/schedule/subject';
 import type { SubjectNote } from '../../src/domain/schedule/subject-note';
 import type { Tag } from '../../src/domain/tag/tag';
@@ -267,6 +271,45 @@ export class InMemorySubjectRepository implements SubjectRepository {
   }
 }
 
+export class InMemoryClassAttendanceRepository implements ClassAttendanceRepository {
+  readonly items = new Map<string, ClassAttendance>();
+
+  async findById(id: ClassAttendanceId): Promise<Result<ClassAttendance | null>> {
+    return ok(this.items.get(id) ?? null);
+  }
+
+  async findAll(query: ClassAttendanceQuery = {}): Promise<Result<ClassAttendance[]>> {
+    const all = [...this.items.values()].filter(
+      (item) =>
+        (query.subjectId === undefined || item.subjectId === query.subjectId) &&
+        (query.blockId === undefined || item.blockId === query.blockId),
+    );
+
+    const visible = query.includeDeleted === true ? all : all.filter((i) => i.deletedAt === null);
+
+    return ok(
+      [...visible].sort(
+        (a, b) => b.sessionDate.localeCompare(a.sessionDate) || a.id.localeCompare(b.id),
+      ),
+    );
+  }
+
+  async save(record: ClassAttendance): Promise<Result<ClassAttendance>> {
+    this.items.set(record.id, record);
+    return ok(record);
+  }
+
+  async saveMany(records: readonly ClassAttendance[]): Promise<Result<ClassAttendance[]>> {
+    for (const record of records) this.items.set(record.id, record);
+    return ok([...records]);
+  }
+
+  async hardDelete(id: ClassAttendanceId): Promise<Result<void>> {
+    this.items.delete(id);
+    return ok(undefined);
+  }
+}
+
 export class InMemorySubjectNoteRepository implements SubjectNoteRepository {
   readonly items = new Map<string, SubjectNote>();
 
@@ -375,6 +418,7 @@ export interface TestHarness {
   readonly subjects: InMemorySubjectRepository;
   readonly scheduleBlocks: InMemoryScheduleBlockRepository;
   readonly subjectNotes: InMemorySubjectNoteRepository;
+  readonly attendance: InMemoryClassAttendanceRepository;
   readonly pdf: StubPdfTextExtractor;
   readonly clock: FixedClock;
   readonly notifications: {
@@ -399,6 +443,7 @@ export const createTestHarness = (
   const subjects = new InMemorySubjectRepository();
   const scheduleBlocks = new InMemoryScheduleBlockRepository();
   const subjectNotes = new InMemorySubjectNoteRepository();
+  const attendance = new InMemoryClassAttendanceRepository();
   const pdf = new StubPdfTextExtractor();
 
   const notifications = {
@@ -439,6 +484,7 @@ export const createTestHarness = (
     subjects,
     scheduleBlocks,
     subjectNotes,
+    attendance,
     pdf,
     clock,
     ids,
@@ -464,6 +510,7 @@ export const createTestHarness = (
     subjects,
     scheduleBlocks,
     subjectNotes,
+    attendance,
     pdf,
     clock,
     notifications,

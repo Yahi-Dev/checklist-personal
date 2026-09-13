@@ -31,7 +31,7 @@ import { ScheduleDayCard } from '../features/schedule/schedule-day-card';
 import { toDateKey } from '../shared/lib/date-format';
 import { useNow } from '../shared/hooks/use-now';
 import { useScheduleActions } from '../features/schedule/use-schedule-actions';
-import { useScheduleBlocks, useSubjects } from '../shared/hooks/use-live-query';
+import { useAttendance, useScheduleBlocks, useSubjects } from '../shared/hooks/use-live-query';
 
 /**
  * El horario de la universidad, cuatrimestre a cuatrimestre.
@@ -44,6 +44,7 @@ import { useScheduleBlocks, useSubjects } from '../shared/hooks/use-live-query';
 export const SchedulePage = () => {
   const subjects = useSubjects();
   const blocks = useScheduleBlocks();
+  const attendance = useAttendance();
   const actions = useScheduleActions();
   const now = new Date(useNow());
 
@@ -197,6 +198,9 @@ export const SchedulePage = () => {
                 isToday={day.weekday === todayWeekday}
                 nowMinutes={nowMinutes}
                 entranceDelayMs={Math.min(index * 45, 270)}
+                {...(day.weekday === todayWeekday
+                  ? { todayDate: today, attendance: attendance ?? [] }
+                  : {})}
                 onSelect={(item) => {
                   setSelectedSubject(item.subject);
                 }}
@@ -231,6 +235,7 @@ export const SchedulePage = () => {
         onClose={() => {
           setSelectedSubject(null);
         }}
+        today={today}
         onOpenTask={(task) => {
           /* Se CIERRA la hoja de la materia antes de abrir la tarea en vez de apilar un
              dialogo sobre otro: dos hojas superpuestas en un movil dejan al usuario sin

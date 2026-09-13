@@ -1,5 +1,6 @@
 import type { Category } from '../../domain/category/category';
 import type { FocusSession } from '../../domain/focus/focus-session';
+import type { ClassAttendance } from '../../domain/schedule/class-attendance';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { Subject } from '../../domain/schedule/subject';
 import type { SubjectNote } from '../../domain/schedule/subject-note';
@@ -31,6 +32,7 @@ export type FocusSessionRecord = FocusSession & IndexHints;
 export type SubjectRecord = Subject & IndexHints;
 export type ScheduleBlockRecord = ScheduleBlock & IndexHints;
 export type SubjectNoteRecord = SubjectNote & IndexHints;
+export type ClassAttendanceRecord = ClassAttendance & IndexHints;
 
 /**
  * Añade los campos de indexado.
@@ -64,6 +66,7 @@ export const SYNCABLE_ENTITIES = [
   'subject',
   'scheduleBlock',
   'subjectNote',
+  'classAttendance',
 ] as const;
 
 export type SyncableEntity = (typeof SYNCABLE_ENTITIES)[number];
@@ -125,6 +128,7 @@ const PULL_CURSOR_TABLE: Record<SyncableEntity, string> = {
   subject: 'subjects',
   scheduleBlock: 'scheduleBlocks',
   subjectNote: 'subjectNotes',
+  classAttendance: 'classAttendance',
 };
 
 /**

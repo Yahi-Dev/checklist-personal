@@ -159,6 +159,11 @@ export const subjectBackupSchema = z.object({
     .enum(['critical', 'watch', 'normal', 'relaxed'])
     .nullish()
     .transform((value) => value ?? 'normal'),
+  maxAbsences: z
+    .number()
+    .int()
+    .nullish()
+    .transform((value) => value ?? null),
   termCode: z.string(),
   startsOn: calendarDate,
   endsOn: calendarDate,
@@ -198,6 +203,19 @@ export const subjectNoteBackupSchema = z.object({
   deletedAt: nullableIso,
 });
 
+export const classAttendanceBackupSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  blockId: z.string(),
+  subjectId: z.string(),
+  sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, { message: 'Fecha AAAA-MM-DD no valida' }),
+  status: z.enum(['attended', 'absent', 'excused', 'cancelled']),
+  note: z.string().nullable(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+  deletedAt: nullableIso,
+});
+
 export const backupFileSchema = z.object({
   format: z.literal(BACKUP_FORMAT_ID),
   version: z.number().int().min(1).max(BACKUP_VERSION),
@@ -214,6 +232,7 @@ export const backupFileSchema = z.object({
     subjects: z.array(subjectBackupSchema).default([]),
     scheduleBlocks: z.array(scheduleBlockBackupSchema).default([]),
     subjectNotes: z.array(subjectNoteBackupSchema).default([]),
+    attendance: z.array(classAttendanceBackupSchema).default([]),
   }),
 });
 

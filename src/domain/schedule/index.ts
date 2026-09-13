@@ -1,3 +1,5 @@
+export * from './attendance-report';
+export * from './class-attendance';
 export * from './schedule-block';
 export * from './subject-note';
 export * from './subject';

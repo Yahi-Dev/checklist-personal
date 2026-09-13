@@ -2,6 +2,8 @@ import type { Attachment } from '../../domain/task/attachment';
 import type { Category } from '../../domain/category/category';
 import type {
   CategoryRow,
+  ClassAttendanceRow,
+  ClassAttendanceUpsert,
   CategoryUpsert,
   FocusSessionRow,
   FocusSessionUpsert,
@@ -19,6 +21,7 @@ import type {
 } from './database.types';
 import type {
   CategoryId,
+  ClassAttendanceId,
   ScheduleBlockId,
   SubjectId,
   SubjectNoteId,
@@ -30,6 +33,7 @@ import type { FocusSession } from '../../domain/focus/focus-session';
 import type { RecurrenceRule, Weekday } from '../../domain/recurrence/recurrence-rule';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { Subject } from '../../domain/schedule/subject';
+import type { ClassAttendance } from '../../domain/schedule/class-attendance';
 import type { SubjectNote } from '../../domain/schedule/subject-note';
 import type { Subtask } from '../../domain/task/subtask';
 import type { Tag } from '../../domain/tag/tag';
@@ -40,6 +44,7 @@ import {
   DEFAULT_ATTENTION,
   isAttentionLevel,
 } from '../../domain/schedule/value-objects/attention-level';
+import { isAttendanceStatus } from '../../domain/schedule/class-attendance';
 import { isSubjectNoteKind } from '../../domain/schedule/subject-note';
 
 /**
@@ -217,6 +222,7 @@ export const subjectToRow = (subject: Subject): SubjectUpsert => ({
   teacher_name: subject.teacherName,
   color: subject.color,
   attention: subject.attention,
+  max_absences: subject.maxAbsences,
   term_code: subject.termCode,
   starts_on: subject.startsOn,
   ends_on: subject.endsOn,
@@ -239,6 +245,7 @@ export const rowToSubject = (row: SubjectRow): Subject => ({
   /* Mismo motivo que en la tarea: si el servidor aun no tiene la columna, aqui llega
      `undefined` y dejaria una asignatura con un nivel de atencion imposible. */
   attention: isAttentionLevel(row.attention) ? row.attention : DEFAULT_ATTENTION,
+  maxAbsences: row.max_absences ?? null,
   termCode: row.term_code,
   /* `starts_on` es `date`, no `timestamptz`: ya viene como `AAAA-MM-DD` y pasarlo por
      `normalizeTimestamp` lo convertiria en un instante UTC y le restaria un dia a
@@ -306,6 +313,36 @@ export const rowToSubjectNote = (row: SubjectNoteRow): SubjectNote => ({
   body: row.body,
   isPinned: row.is_pinned,
   position: row.position,
+  createdAt: normalizeTimestamp(row.created_at) ?? row.created_at,
+  updatedAt: normalizeTimestamp(row.updated_at) ?? row.updated_at,
+  deletedAt: normalizeTimestamp(row.deleted_at),
+});
+
+export const classAttendanceToRow = (record: ClassAttendance): ClassAttendanceUpsert => ({
+  id: record.id,
+  user_id: record.userId,
+  block_id: record.blockId,
+  subject_id: record.subjectId,
+  session_date: record.sessionDate,
+  status: record.status,
+  note: record.note,
+  created_at: record.createdAt,
+  updated_at: record.updatedAt,
+  deleted_at: record.deletedAt,
+});
+
+export const rowToClassAttendance = (row: ClassAttendanceRow): ClassAttendance => ({
+  id: brandId<ClassAttendanceId>(row.id),
+  userId: brandId<UserId>(row.user_id),
+  blockId: brandId<ScheduleBlockId>(row.block_id),
+  subjectId: brandId<SubjectId>(row.subject_id),
+  /* `session_date` es `date`, no `timestamptz`: ya viene como AAAA-MM-DD y pasarlo por
+     `normalizeTimestamp` lo convertiria en un instante UTC, restandole un dia a
+     cualquiera que este al oeste de Greenwich. Marcar el martes y ver el lunes seria el
+     sintoma, y en un control de faltas eso es un error caro. */
+  sessionDate: row.session_date,
+  status: isAttendanceStatus(row.status) ? row.status : 'absent',
+  note: row.note,
   createdAt: normalizeTimestamp(row.created_at) ?? row.created_at,
   updatedAt: normalizeTimestamp(row.updated_at) ?? row.updated_at,
   deletedAt: normalizeTimestamp(row.deleted_at),

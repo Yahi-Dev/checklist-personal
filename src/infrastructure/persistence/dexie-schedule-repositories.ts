@@ -2,8 +2,16 @@ import type { AppDatabase } from './database';
 import type { Outbox } from './outbox';
 import type { Result } from '../../domain/shared/result';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
-import type { ScheduleBlockId, SubjectId, SubjectNoteId } from '../../domain/shared/branded';
 import type {
+  ClassAttendanceId,
+  ScheduleBlockId,
+  SubjectId,
+  SubjectNoteId,
+} from '../../domain/shared/branded';
+import type { ClassAttendance } from '../../domain/schedule/class-attendance';
+import type {
+  ClassAttendanceQuery,
+  ClassAttendanceRepository,
   ScheduleBlockQuery,
   ScheduleBlockRepository,
   SubjectNoteQuery,
@@ -314,6 +322,113 @@ export class DexieSubjectNoteRepository implements SubjectNoteRepository {
   async hardDelete(id: SubjectNoteId): Promise<Result<void>> {
     return fromPromise(this.database.subjectNotes.delete(id), (cause) =>
       toDomainError(cause, 'No se pudo borrar la nota.'),
+    );
+  }
+}
+
+export class DexieClassAttendanceRepository implements ClassAttendanceRepository {
+  constructor(
+    private readonly database: AppDatabase,
+    private readonly outbox: Outbox,
+  ) {}
+
+  async findById(id: ClassAttendanceId): Promise<Result<ClassAttendance | null>> {
+    return fromPromise(
+      this.database.classAttendance
+        .get(id)
+        .then((record) => (record === undefined ? null : stripHints<ClassAttendance>(record))),
+      (cause) => toDomainError(cause, 'No se pudo leer la asistencia.'),
+    );
+  }
+
+  async findAll(query: ClassAttendanceQuery = {}): Promise<Result<ClassAttendance[]>> {
+    return fromPromise(
+      (async () => {
+        const includeDeleted = query.includeDeleted === true;
+        const table = this.database.classAttendance;
+
+        let records;
+        if (query.blockId !== undefined) {
+          records = includeDeleted
+            ? await table.where('blockId').equals(query.blockId).toArray()
+            : await table.where('[_deleted+blockId]').equals([0, query.blockId]).toArray();
+        } else if (query.subjectId !== undefined) {
+          records = includeDeleted
+            ? await table.where('subjectId').equals(query.subjectId).toArray()
+            : await table.where('[_deleted+subjectId]').equals([0, query.subjectId]).toArray();
+        } else {
+          records = includeDeleted
+            ? await table.toArray()
+            : await table.where('_deleted').equals(0).toArray();
+        }
+
+        /* El indice elegido solo sirve a UNO de los dos criterios; el que sobra se aplica
+           aqui. Ignorarlo en silencio devolveria de mas, que es la peor forma de fallar
+           de una consulta porque el resultado parece correcto. */
+        const filtered = records.filter(
+          (record) =>
+            (query.subjectId === undefined || record.subjectId === query.subjectId) &&
+            (query.blockId === undefined || record.blockId === query.blockId),
+        );
+
+        return filtered
+          .map((record) => stripHints<ClassAttendance>(record))
+          .sort((a, b) => b.sessionDate.localeCompare(a.sessionDate) || a.id.localeCompare(b.id));
+      })(),
+      (cause) => toDomainError(cause, 'No se pudo leer la asistencia.'),
+    );
+  }
+
+  async save(record: ClassAttendance): Promise<Result<ClassAttendance>> {
+    return fromPromise(
+      this.database.transaction(
+        'rw',
+        [this.database.classAttendance, this.database.outbox],
+        async () => {
+          await this.database.classAttendance.put(withHints(record, true));
+          await this.outbox.enqueue(
+            'classAttendance',
+            record.id,
+            'upsert',
+            record,
+            record.updatedAt,
+          );
+          return record;
+        },
+      ),
+      (cause) => toDomainError(cause, 'No se pudo guardar la asistencia.'),
+    );
+  }
+
+  async saveMany(records: readonly ClassAttendance[]): Promise<Result<ClassAttendance[]>> {
+    if (records.length === 0) return ok([]);
+
+    return fromPromise(
+      this.database.transaction(
+        'rw',
+        [this.database.classAttendance, this.database.outbox],
+        async () => {
+          await this.database.classAttendance.bulkPut(
+            records.map((record) => withHints(record, true)),
+          );
+          await this.outbox.enqueueMany(
+            'classAttendance',
+            records.map((record) => ({
+              id: record.id,
+              updatedAt: record.updatedAt,
+              payload: record,
+            })),
+          );
+          return [...records];
+        },
+      ),
+      (cause) => toDomainError(cause, 'No se pudo guardar la asistencia.'),
+    );
+  }
+
+  async hardDelete(id: ClassAttendanceId): Promise<Result<void>> {
+    return fromPromise(this.database.classAttendance.delete(id), (cause) =>
+      toDomainError(cause, 'No se pudo borrar la asistencia.'),
     );
   }
 }

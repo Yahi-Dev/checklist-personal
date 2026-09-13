@@ -114,6 +114,7 @@ export type SubjectRow = {
   teacher_name: string | null;
   color: string;
   attention: 'critical' | 'watch' | 'normal' | 'relaxed';
+  max_absences: number | null;
   term_code: string;
   starts_on: string | null;
   ends_on: string | null;
@@ -150,6 +151,20 @@ export type SubjectNoteRow = {
   body: string;
   is_pinned: boolean;
   position: number;
+  created_at: string;
+  updated_at: string;
+  server_updated_at: string;
+  deleted_at: string | null;
+};
+
+export type ClassAttendanceRow = {
+  id: string;
+  user_id: string;
+  block_id: string;
+  subject_id: string;
+  session_date: string;
+  status: 'attended' | 'absent' | 'excused' | 'cancelled';
+  note: string | null;
   created_at: string;
   updated_at: string;
   server_updated_at: string;
@@ -229,6 +244,13 @@ export type Database = {
         Update: Partial<SubjectNoteRow>;
         Relationships: [];
       };
+      class_attendance: {
+        Row: ClassAttendanceRow;
+        Insert: Omit<ClassAttendanceRow, 'created_at' | 'updated_at' | 'server_updated_at'> &
+          Partial<Pick<ClassAttendanceRow, 'created_at' | 'updated_at'>>;
+        Update: Partial<ClassAttendanceRow>;
+        Relationships: [];
+      };
       push_subscriptions: {
         Row: PushSubscriptionRow;
         Insert: Omit<PushSubscriptionRow, 'id' | 'created_at' | 'last_used_at'> &
@@ -261,6 +283,7 @@ export type FocusSessionUpsert = Omit<FocusSessionRow, 'server_updated_at'>;
 export type SubjectUpsert = Omit<SubjectRow, 'server_updated_at'>;
 export type ScheduleBlockUpsert = Omit<ScheduleBlockRow, 'server_updated_at'>;
 export type SubjectNoteUpsert = Omit<SubjectNoteRow, 'server_updated_at'>;
+export type ClassAttendanceUpsert = Omit<ClassAttendanceRow, 'server_updated_at'>;
 
 /** Nombre de tabla remota para cada tipo de entidad de la cola de salida. */
 export const TABLE_FOR_ENTITY = {
@@ -271,4 +294,5 @@ export const TABLE_FOR_ENTITY = {
   subject: 'subjects',
   scheduleBlock: 'schedule_blocks',
   subjectNote: 'subject_notes',
+  classAttendance: 'class_attendance',
 } as const;

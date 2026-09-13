@@ -2,6 +2,7 @@ import type { Category } from '../../domain/category/category';
 import type {
   CategoryId,
   FocusSessionId,
+  ClassAttendanceId,
   ScheduleBlockId,
   SubjectId,
   SubjectNoteId,
@@ -13,6 +14,7 @@ import type { FocusSession } from '../../domain/focus/focus-session';
 import type { IsoDateTime } from '../../domain/task/value-objects/iso-date-time';
 import type { Result } from '../../domain/shared/result';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
+import type { ClassAttendance } from '../../domain/schedule/class-attendance';
 import type { Subject } from '../../domain/schedule/subject';
 import type { SubjectNote } from '../../domain/schedule/subject-note';
 import type { Tag } from '../../domain/tag/tag';
@@ -109,6 +111,20 @@ export interface SubjectNoteRepository {
   save(note: SubjectNote): Promise<Result<SubjectNote>>;
   saveMany(notes: readonly SubjectNote[]): Promise<Result<SubjectNote[]>>;
   hardDelete(id: SubjectNoteId): Promise<Result<void>>;
+}
+
+export interface ClassAttendanceQuery {
+  readonly includeDeleted?: boolean;
+  readonly subjectId?: SubjectId;
+  readonly blockId?: ScheduleBlockId;
+}
+
+export interface ClassAttendanceRepository {
+  findById(id: ClassAttendanceId): Promise<Result<ClassAttendance | null>>;
+  findAll(query?: ClassAttendanceQuery): Promise<Result<ClassAttendance[]>>;
+  save(record: ClassAttendance): Promise<Result<ClassAttendance>>;
+  saveMany(records: readonly ClassAttendance[]): Promise<Result<ClassAttendance[]>>;
+  hardDelete(id: ClassAttendanceId): Promise<Result<void>>;
 }
 
 export interface ScheduleBlockRepository {

@@ -19,6 +19,9 @@ import { CLASS_MODALITY_LABEL } from '../../domain/schedule/value-objects/class-
 import { describeLocation, formatClassTime } from './schedule-format';
 import { Dialog, DialogContent } from '../../shared/ui/overlays';
 import { Field } from '../../shared/ui/form-controls';
+import type { CalendarDate } from '../../domain/shared/clock';
+
+import { SubjectAttendanceSection } from './subject-attendance-section';
 import { SubjectNotesSection } from './subject-notes-section';
 import { SubjectTasksSection } from './subject-tasks-section';
 import { useScheduleActions } from './use-schedule-actions';
@@ -41,9 +44,16 @@ export interface SubjectSheetProps {
   readonly blocks: readonly ScheduleBlock[];
   readonly onClose: () => void;
   readonly onOpenTask: (task: Task) => void;
+  readonly today: CalendarDate;
 }
 
-export const SubjectSheet = ({ subject, blocks, onClose, onOpenTask }: SubjectSheetProps) => {
+export const SubjectSheet = ({
+  subject,
+  blocks,
+  onClose,
+  onOpenTask,
+  today,
+}: SubjectSheetProps) => {
   const actions = useScheduleActions();
   const [editing, setEditing] = useState<ScheduleBlock | null>(null);
 
@@ -135,6 +145,8 @@ export const SubjectSheet = ({ subject, blocks, onClose, onOpenTask }: SubjectSh
                 </ul>
               )}
             </section>
+
+            <SubjectAttendanceSection subject={subject} blocks={blocks} today={today} />
 
             <SubjectTasksSection subject={subject} onOpenTask={onOpenTask} />
 

@@ -4,6 +4,7 @@ import type {
   CategoryRecord,
   FocusSessionRecord,
   OutboxEntry,
+  ClassAttendanceRecord,
   ScheduleBlockRecord,
   SubjectNoteRecord,
   SubjectRecord,
@@ -31,6 +32,7 @@ export class AppDatabase extends Dexie {
   declare subjects: Table<SubjectRecord, string>;
   declare scheduleBlocks: Table<ScheduleBlockRecord, string>;
   declare subjectNotes: Table<SubjectNoteRecord, string>;
+  declare classAttendance: Table<ClassAttendanceRecord, string>;
   declare outbox: Table<OutboxEntry, number>;
   declare meta: Table<SyncMetaRecord, string>;
 
@@ -116,6 +118,20 @@ export class AppDatabase extends Dexie {
 
       subjectNotes: 'id, subjectId, updatedAt, _deleted, _dirty, [_deleted+subjectId]',
     });
+
+    /**
+     * v5: asistencia.
+     *
+     * `[_deleted+subjectId]` sirve al recuento de faltas de una materia, que es la
+     * consulta que corre en cada pintado de la hoja; `[_deleted+blockId]` sirve a marcar
+     * y desmarcar una clase concreta. `sessionDate` suelto queda para la vista de
+     * rellenar hacia atras, que ordena por fecha sin filtrar por materia.
+     */
+    this.version(5).stores({
+      classAttendance:
+        'id, blockId, subjectId, sessionDate, updatedAt, _deleted, _dirty, ' +
+        '[_deleted+subjectId], [_deleted+blockId]',
+    });
   }
 
   /** Vacia todo. Solo lo usa el cierre de sesion y la resincronizacion completa. */
@@ -130,6 +146,7 @@ export class AppDatabase extends Dexie {
         this.subjects,
         this.scheduleBlocks,
         this.subjectNotes,
+        this.classAttendance,
         this.outbox,
         this.meta,
       ],
@@ -142,6 +159,7 @@ export class AppDatabase extends Dexie {
           this.subjects.clear(),
           this.scheduleBlocks.clear(),
           this.subjectNotes.clear(),
+          this.classAttendance.clear(),
           this.outbox.clear(),
           this.meta.clear(),
         ]);

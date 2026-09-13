@@ -8,6 +8,7 @@ import type { AppDatabase } from '../persistence/database';
 import type { AppSupabaseClient } from '../supabase/client';
 import type {
   CategoryRow,
+  ClassAttendanceRow,
   FocusSessionRow,
   ScheduleBlockRow,
   SubjectNoteRow,
@@ -34,8 +35,10 @@ import { TABLE_FOR_ENTITY } from '../supabase/database.types';
 import { DomainErrors, toDomainError } from '../../domain/shared/domain-error';
 import {
   categoryToRow,
+  classAttendanceToRow,
   focusSessionToRow,
   rowToCategory,
+  rowToClassAttendance,
   rowToFocusSession,
   rowToScheduleBlock,
   rowToSubject,
@@ -444,6 +447,7 @@ export class SyncEngine implements SyncService {
       'subject',
       'scheduleBlock',
       'subjectNote',
+      'classAttendance',
     ];
     const failures: string[] = [];
 
@@ -575,6 +579,8 @@ export class SyncEngine implements SyncService {
         return scheduleBlockToRow(payload as Parameters<typeof scheduleBlockToRow>[0]);
       case 'subjectNote':
         return subjectNoteToRow(payload as Parameters<typeof subjectNoteToRow>[0]);
+      case 'classAttendance':
+        return classAttendanceToRow(payload as Parameters<typeof classAttendanceToRow>[0]);
       default: {
         /* Guardia de exhaustividad. Antes habia un `throw` a secas y eso ANULABA la
            comprobacion del compilador: añadir un tipo de entidad nuevo y olvidarse de
@@ -676,6 +682,9 @@ export class SyncEngine implements SyncService {
       this.pullScheduleBlocks(userId, since),
     );
     await this.pullTolerant('subjectNote', userId, (since) => this.pullSubjectNotes(userId, since));
+    await this.pullTolerant('classAttendance', userId, (since) =>
+      this.pullClassAttendance(userId, since),
+    );
   }
 
   /**
@@ -914,6 +923,36 @@ export class SyncEngine implements SyncService {
     return watermark;
   }
 
+  private async pullClassAttendance(userId: string, since: string): Promise<string> {
+    const { data, error } = await this.supabase
+      .from('class_attendance')
+      .select('*')
+      .eq('user_id', userId)
+      .gt('server_updated_at', since)
+      .order('server_updated_at', { ascending: true });
+
+    if (error !== null) {
+      if (isMissingTable(error.code)) throw new RemoteSchemaBehind('la tabla "class_attendance"');
+      throw new Error(`Fallo al bajar la asistencia: ${error.message}`);
+    }
+
+    let watermark = since;
+
+    for (const row of (data ?? []) as ClassAttendanceRow[]) {
+      const remote = rowToClassAttendance(row);
+      await this.applyRemote(
+        this.database.classAttendance,
+        'classAttendance',
+        remote.id,
+        remote,
+        remote.updatedAt,
+      );
+      watermark = maxIso(watermark, row.server_updated_at);
+    }
+
+    return watermark;
+  }
+
   /**
    * Escribe una fila remota en la copia local resolviendo el conflicto.
    *
@@ -978,6 +1017,8 @@ export class SyncEngine implements SyncService {
         return this.database.scheduleBlocks;
       case 'subjectNote':
         return this.database.subjectNotes;
+      case 'classAttendance':
+        return this.database.classAttendance;
       default: {
         // Mismo motivo que en `toRow`: sin esto el `switch` deja de ser exhaustivo y
         // olvidar un caso hace que su `_dirty` no baje nunca y se reenvie sin fin.
@@ -1031,6 +1072,7 @@ export class SyncEngine implements SyncService {
         this.database.subjects.clear(),
         this.database.scheduleBlocks.clear(),
         this.database.subjectNotes.clear(),
+        this.database.classAttendance.clear(),
       ]);
       for (const entity of SYNCABLE_ENTITIES) {
         await this.database.setMeta(pullCursorKey(entity, userId), EPOCH);
@@ -1105,6 +1147,14 @@ export class SyncEngine implements SyncService {
           'subjectNote',
           payload,
           rowToSubjectNote,
+        );
+      })
+      .on('postgres_changes', { ...watch, table: 'class_attendance' }, (payload) => {
+        void this.applyRealtimeChange(
+          this.database.classAttendance,
+          'classAttendance',
+          payload,
+          rowToClassAttendance,
         );
       })
       .subscribe((status) => {

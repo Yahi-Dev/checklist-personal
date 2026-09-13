@@ -5,6 +5,7 @@ import type { Category } from '../../domain/category/category';
 import type { FocusSession } from '../../domain/focus/focus-session';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { Subject } from '../../domain/schedule/subject';
+import type { ClassAttendance } from '../../domain/schedule/class-attendance';
 import type { SubjectNote } from '../../domain/schedule/subject-note';
 import type { Tag } from '../../domain/tag/tag';
 import type { Task } from '../../domain/task/task';
@@ -172,6 +173,21 @@ export const useTasksBySubject = (subjectId: string | null): Task[] | undefined 
       const tasks = records.map((record) => stripHints<Task>(record));
 
       return subjectId === null ? tasks.filter((task) => task.subjectId === null) : tasks;
+    },
+    [subjectId],
+    undefined,
+  );
+
+/** Las marcas de asistencia. Sin materia devuelve las de todas, para el recuento global. */
+export const useAttendance = (subjectId?: string): ClassAttendance[] | undefined =>
+  useLiveQuery(
+    async () => {
+      const records =
+        subjectId === undefined
+          ? await db.classAttendance.where('_deleted').equals(0).toArray()
+          : await db.classAttendance.where('[_deleted+subjectId]').equals([0, subjectId]).toArray();
+
+      return records.map((record) => stripHints<ClassAttendance>(record));
     },
     [subjectId],
     undefined,

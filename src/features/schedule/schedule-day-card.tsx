@@ -1,9 +1,14 @@
 import { Building2, ChevronRight, DoorOpen, Globe } from 'lucide-react';
 
+import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { ScheduleDay, ScheduledClass } from '../../domain/schedule/weekly-schedule';
 
+import type { AttendanceStatus, ClassAttendance } from '../../domain/schedule/class-attendance';
 import type { AttentionLevel } from '../../domain/schedule/value-objects/attention-level';
+import type { CalendarDate } from '../../domain/shared/clock';
 
+import { attendanceKeyFor } from '../../domain/schedule/class-attendance';
+import { AttendanceToggle } from './attendance-toggle';
 import { Badge } from '../../shared/ui/feedback';
 import { cn } from '../../shared/lib/cn';
 import {
@@ -35,6 +40,9 @@ export interface ScheduleDayCardProps {
   /** Minutos transcurridos del dia. Solo se usa si `isToday`. */
   readonly nowMinutes: number;
   readonly onSelect: (item: ScheduledClass) => void;
+  /** El dia concreto, solo para el dia de HOY. Sin el no se puede marcar asistencia. */
+  readonly todayDate?: CalendarDate;
+  readonly attendance?: readonly ClassAttendance[];
   /** Escalona la entrada de las tarjetas al abrir la pantalla. */
   readonly entranceDelayMs?: number;
 }
@@ -71,6 +79,8 @@ export const ScheduleDayCard = ({
   isToday,
   nowMinutes,
   onSelect,
+  todayDate,
+  attendance = [],
   entranceDelayMs = 0,
 }: ScheduleDayCardProps) => (
   <section
@@ -104,15 +114,35 @@ export const ScheduleDayCard = ({
     <div className="px-4 py-3">
       {day.classes.map((item, index) => {
         const gap = item.gapAfterMinutes === null ? null : formatGap(item.gapAfterMinutes);
+        const progress = isToday ? classProgressAt(item.block, nowMinutes) : 'upcoming';
+
+        /* Solo el dia de HOY puede marcarse desde aqui, y solo una clase que ya empezo.
+           Los dias pasados se rellenan desde la materia, que es donde se ve cuales
+           quedaron en blanco; marcar por adelantado no tendria sentido. */
+        const canMark = todayDate !== undefined && progress !== 'upcoming';
 
         return (
           <div key={item.block.id}>
             <ClassRow
               item={item}
-              progress={isToday ? classProgressAt(item.block, nowMinutes) : 'upcoming'}
-              isLast={index === day.classes.length - 1 && gap === null}
+              progress={progress}
+              isLast={index === day.classes.length - 1 && gap === null && !canMark}
               onSelect={onSelect}
             />
+
+            {canMark && (
+              <div className={cn(ROW_GRID, 'pb-3')}>
+                <span />
+                <span />
+                <AttendanceToggle
+                  blockId={item.block.id}
+                  sessionDate={todayDate}
+                  current={statusOf(attendance, item.block.id, todayDate)}
+                />
+                <span />
+              </div>
+            )}
+
             {gap !== null && <GapRow label={gap} />}
           </div>
         );
@@ -247,6 +277,22 @@ const ClassRow = ({ item, progress, isLast, onSelect }: ClassRowProps) => {
         aria-hidden="true"
       />
     </button>
+  );
+};
+
+/** La marca de esa clase concreta, si la hay. */
+const statusOf = (
+  records: readonly ClassAttendance[],
+  blockId: ScheduleBlock['id'],
+  date: CalendarDate,
+): AttendanceStatus | null => {
+  const key = attendanceKeyFor(blockId, date);
+
+  return (
+    records.find(
+      (record) =>
+        record.deletedAt === null && attendanceKeyFor(record.blockId, record.sessionDate) === key,
+    )?.status ?? null
   );
 };
 

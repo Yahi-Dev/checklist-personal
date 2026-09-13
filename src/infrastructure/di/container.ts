@@ -12,6 +12,7 @@ import {
   DexieTagRepository,
 } from '../persistence/dexie-repositories';
 import {
+  DexieClassAttendanceRepository,
   DexieScheduleBlockRepository,
   DexieSubjectNoteRepository,
   DexieSubjectRepository,
@@ -72,6 +73,7 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
   const subjects = new DexieSubjectRepository(database, outbox);
   const scheduleBlocks = new DexieScheduleBlockRepository(database, outbox);
   const subjectNotes = new DexieSubjectNoteRepository(database, outbox);
+  const attendance = new DexieClassAttendanceRepository(database, outbox);
 
   /* Se construye siempre, pero no carga nada: pdfjs entra por `import()` dinamico la
      primera vez que alguien importa un horario, y no antes. */
@@ -111,6 +113,7 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
     subjects,
     scheduleBlocks,
     subjectNotes,
+    attendance,
     clock,
     ids,
     notifications,

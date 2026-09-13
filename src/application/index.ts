@@ -7,6 +7,7 @@ export * from './use-cases/backup/backup-commands';
 export * from './use-cases/backup/backup-schema';
 export * from './use-cases/category/category-commands';
 export * from './use-cases/focus/focus-commands';
+export * from './use-cases/schedule/attendance-commands';
 export * from './use-cases/schedule/import-schedule-pdf';
 export * from './use-cases/schedule/schedule-commands';
 export * from './use-cases/schedule/subject-note-commands';

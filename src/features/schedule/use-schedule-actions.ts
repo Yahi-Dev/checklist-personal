@@ -4,6 +4,8 @@ import { useCallback, useMemo } from 'react';
 import type { DomainError } from '../../domain/shared/domain-error';
 import type { ImportScheduleSummary } from '../../application/use-cases/schedule/import-schedule-pdf';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
+import type { AttendanceStatus, ClassAttendance } from '../../domain/schedule/class-attendance';
+import type { CalendarDate } from '../../domain/shared/clock';
 import type { ScheduleBlockId, SubjectId, SubjectNoteId } from '../../domain/shared/branded';
 import type { SubjectNote } from '../../domain/schedule/subject-note';
 import type { Subject } from '../../domain/schedule/subject';
@@ -18,6 +20,10 @@ import type {
   UpdateSubjectNoteCommand,
 } from '../../application/use-cases/schedule/subject-note-commands';
 
+import {
+  ClearAttendanceUseCase,
+  MarkAttendanceUseCase,
+} from '../../application/use-cases/schedule/attendance-commands';
 import { getContainer } from '../../infrastructure/di/container';
 import { ImportSchedulePdfUseCase } from '../../application/use-cases/schedule/import-schedule-pdf';
 import { isErr } from '../../domain/shared/result';
@@ -65,6 +71,13 @@ export interface ScheduleActions {
   updateNote: (command: UpdateSubjectNoteCommand) => Promise<SubjectNote | null>;
   toggleNotePinned: (noteId: SubjectNoteId) => Promise<void>;
   deleteNote: (noteId: SubjectNoteId) => Promise<void>;
+  /** Marca, o vuelve a "sin marcar" si se toca el estado que ya estaba. */
+  markAttendance: (
+    blockId: ScheduleBlockId,
+    sessionDate: CalendarDate,
+    status: AttendanceStatus,
+    current: AttendanceStatus | null,
+  ) => Promise<ClassAttendance | null>;
 }
 
 export const useScheduleActions = (): ScheduleActions => {
@@ -84,6 +97,8 @@ export const useScheduleActions = (): ScheduleActions => {
       updateNote: new UpdateSubjectNoteUseCase(container.context),
       toggleNotePinned: new ToggleSubjectNotePinnedUseCase(container.context),
       deleteNote: new DeleteSubjectNoteUseCase(container.context),
+      markAttendance: new MarkAttendanceUseCase(container.context),
+      clearAttendance: new ClearAttendanceUseCase(container.context),
     }),
     [container],
   );
@@ -247,6 +262,37 @@ export const useScheduleActions = (): ScheduleActions => {
     [useCases],
   );
 
+  /**
+   * Tocar el estado que ya estaba lo QUITA.
+   *
+   * Sin esa vuelta atras, equivocarse de boton no tendria arreglo desde la tarjeta: el
+   * unico camino seria abrir la materia y buscar el dia. Es el mismo gesto que ya usan
+   * los filtros de la app, y evita tener que añadir un cuarto boton de "borrar".
+   */
+  const markAttendance = useCallback(
+    async (
+      blockId: ScheduleBlockId,
+      sessionDate: CalendarDate,
+      status: AttendanceStatus,
+      current: AttendanceStatus | null,
+    ) => {
+      if (current === status) {
+        const cleared = await useCases.clearAttendance.execute({ blockId, sessionDate });
+        if (isErr(cleared)) showError(cleared.error);
+        return null;
+      }
+
+      const result = await useCases.markAttendance.execute({ blockId, sessionDate, status });
+      if (isErr(result)) {
+        showError(result.error);
+        return null;
+      }
+
+      return result.value;
+    },
+    [useCases],
+  );
+
   return {
     previewImport,
     importPdf,
@@ -261,5 +307,6 @@ export const useScheduleActions = (): ScheduleActions => {
     updateNote,
     toggleNotePinned,
     deleteNote,
+    markAttendance,
   };
 };

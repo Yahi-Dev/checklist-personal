@@ -47,6 +47,14 @@ export interface Subject {
    * servir para las dos cosas.
    */
   readonly attention: AttentionLevel;
+  /**
+   * Faltas que admite antes de reprobar. `null` = sin limite.
+   *
+   * No hay valor por defecto a proposito: cada universidad y cada profesor tienen el
+   * suyo, y un tope inventado que avise de mas es peor que no avisar -a la segunda vez
+   * que se equivoca, el aviso deja de mirarse-.
+   */
+  readonly maxAbsences: number | null;
   /** Cuatrimestre tal y como lo nombra la universidad, ej. `2027-1`. */
   readonly termCode: string;
   readonly startsOn: CalendarDate | null;
@@ -80,6 +88,7 @@ export interface CreateSubjectInput {
   readonly teacherName?: string | null;
   readonly color?: string;
   readonly attention?: AttentionLevel;
+  readonly maxAbsences?: number | null;
   readonly startsOn?: CalendarDate | null;
   readonly endsOn?: CalendarDate | null;
   readonly position?: number;
@@ -155,6 +164,19 @@ export const createSubject = (input: CreateSubjectInput): Result<Subject> => {
     );
   }
 
+  const maxAbsences = input.maxAbsences ?? null;
+  if (maxAbsences !== null && (!Number.isInteger(maxAbsences) || maxAbsences < 0)) {
+    return err(
+      DomainErrors.validation(
+        'El limite de faltas tiene que ser un numero entero de 0 en adelante.',
+        {
+          field: 'maxAbsences',
+          details: { received: maxAbsences },
+        },
+      ),
+    );
+  }
+
   const rangeError = validateRange(input.startsOn ?? null, input.endsOn ?? null);
   if (rangeError !== null) return err(rangeError);
 
@@ -169,6 +191,7 @@ export const createSubject = (input: CreateSubjectInput): Result<Subject> => {
     teacherName: emptyToNull(input.teacherName),
     color,
     attention,
+    maxAbsences,
     termCode,
     startsOn: input.startsOn ?? null,
     endsOn: input.endsOn ?? null,
@@ -188,6 +211,7 @@ export interface UpdateSubjectPatch {
   readonly teacherName?: string | null;
   readonly color?: string;
   readonly attention?: AttentionLevel;
+  readonly maxAbsences?: number | null;
   readonly startsOn?: CalendarDate | null;
   readonly endsOn?: CalendarDate | null;
   readonly position?: number;
@@ -220,6 +244,7 @@ export const updateSubject = (
     /* Al reimportar el PDF nadie pasa `attention`, asi que se conserva sola. Es lo mismo
        que pasa con el color, y por el mismo motivo: no viene en el documento. */
     attention: patch.attention ?? subject.attention,
+    maxAbsences: patch.maxAbsences !== undefined ? patch.maxAbsences : subject.maxAbsences,
     startsOn: patch.startsOn !== undefined ? patch.startsOn : subject.startsOn,
     endsOn: patch.endsOn !== undefined ? patch.endsOn : subject.endsOn,
     position: patch.position ?? subject.position,
