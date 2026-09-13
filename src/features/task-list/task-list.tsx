@@ -8,7 +8,7 @@ import { cn } from '../../shared/lib/cn';
 import { EmptyState } from '../../shared/ui/feedback';
 import { sortTasks } from '../../domain/task/task-sorting';
 import { TaskItem } from './task-item';
-import { useCategoryIndex, useTagIndex } from '../../shared/hooks/use-live-query';
+import { useCategoryIndex, useSubjectIndex, useTagIndex } from '../../shared/hooks/use-live-query';
 import { useNow } from '../../shared/hooks/use-now';
 
 /**
@@ -61,6 +61,7 @@ export const TaskList = ({
   className,
 }: TaskListProps) => {
   const categories = useCategoryIndex();
+  const subjects = useSubjectIndex();
   const tagIndex = useTagIndex();
   const [completedOpen, setCompletedOpen] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -137,6 +138,7 @@ export const TaskList = ({
       key={task.id}
       task={task}
       category={task.categoryId === null ? undefined : categories.get(task.categoryId)}
+      subject={task.subjectId === null ? undefined : subjects.get(task.subjectId)}
       tags={tagsOf(task)}
       now={now}
       entranceDelayMs={Math.min(entranceOrder++ * 35, 320)}

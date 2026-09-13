@@ -1,7 +1,8 @@
 import { GraduationCap, MoreHorizontal, Plus, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ScheduledClass } from '../domain/schedule/weekly-schedule';
+import type { Subject } from '../domain/schedule/subject';
+import type { Task } from '../domain/task/task';
 
 import {
   activeTermCode,
@@ -11,7 +12,8 @@ import {
 import { AddClassDialog } from '../features/schedule/add-class-dialog';
 import { Badge } from '../shared/ui/feedback';
 import { Button } from '../shared/ui/button';
-import { ClassDetailSheet } from '../features/schedule/class-detail-sheet';
+import { SubjectSheet } from '../features/schedule/subject-sheet';
+import { TaskDetailSheet } from '../features/task-detail/task-detail-sheet';
 import { countClasses, formatClassCount, minutesOfDay } from '../features/schedule/schedule-format';
 import {
   DropdownMenu,
@@ -48,7 +50,8 @@ export const SchedulePage = () => {
   const [termCode, setTermCode] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const [selected, setSelected] = useState<ScheduledClass | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const today = toDateKey(now);
 
@@ -194,7 +197,9 @@ export const SchedulePage = () => {
                 isToday={day.weekday === todayWeekday}
                 nowMinutes={nowMinutes}
                 entranceDelayMs={Math.min(index * 45, 270)}
-                onSelect={setSelected}
+                onSelect={(item) => {
+                  setSelectedSubject(item.subject);
+                }}
               />
             ))}
           </div>
@@ -220,10 +225,26 @@ export const SchedulePage = () => {
         />
       )}
 
-      <ClassDetailSheet
-        item={selected}
+      <SubjectSheet
+        subject={selectedSubject}
+        blocks={blocks ?? []}
         onClose={() => {
-          setSelected(null);
+          setSelectedSubject(null);
+        }}
+        onOpenTask={(task) => {
+          /* Se CIERRA la hoja de la materia antes de abrir la tarea en vez de apilar un
+             dialogo sobre otro: dos hojas superpuestas en un movil dejan al usuario sin
+             saber cual cierra el gesto de arrastrar hacia abajo. */
+          setSelectedSubject(null);
+          setSelectedTask(task);
+        }}
+      />
+
+      <TaskDetailSheet
+        task={selectedTask}
+        open={selectedTask !== null}
+        onOpenChange={(next) => {
+          if (!next) setSelectedTask(null);
         }}
       />
     </>

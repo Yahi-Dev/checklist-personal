@@ -1,4 +1,4 @@
-import type { CategoryId, TagId, TaskId } from '../../../domain/shared/branded';
+import type { CategoryId, SubjectId, TagId, TaskId } from '../../../domain/shared/branded';
 import type { IsoDateTime } from '../../../domain/task/value-objects/iso-date-time';
 import type { Priority } from '../../../domain/task/value-objects/priority';
 import type { RecurrenceRule } from '../../../domain/recurrence/recurrence-rule';
@@ -58,6 +58,7 @@ export interface CreateTaskCommand {
   readonly isAllDay?: boolean;
   readonly reminderAt?: IsoDateTime | null;
   readonly categoryId?: CategoryId | null;
+  readonly subjectId?: SubjectId | null;
   readonly tagIds?: readonly TagId[];
   readonly recurrence?: RecurrenceRule | null;
   readonly estimatedPomodoros?: number | null;
@@ -92,6 +93,7 @@ export class CreateTaskUseCase implements UseCase<CreateTaskCommand, Task> {
       isAllDay: command.isAllDay ?? false,
       reminderAt: command.reminderAt ?? null,
       categoryId: command.categoryId ?? null,
+      subjectId: command.subjectId ?? null,
       tagIds: command.tagIds ?? [],
       recurrence: command.recurrence ?? null,
       estimatedPomodoros: command.estimatedPomodoros ?? null,
@@ -139,6 +141,7 @@ export interface UpdateTaskCommand {
   readonly isAllDay?: boolean;
   readonly reminderAt?: IsoDateTime | null;
   readonly categoryId?: CategoryId | null;
+  readonly subjectId?: SubjectId | null;
   readonly tagIds?: readonly TagId[];
   readonly recurrence?: RecurrenceRule | null;
   readonly estimatedPomodoros?: number | null;

@@ -82,6 +82,12 @@ export const taskBackupSchema = z.object({
   reminderAt: nullableIso,
   completedAt: nullableIso,
   categoryId: z.string().nullable(),
+  /* `.nullish()` y no `.nullable()`: un respaldo hecho antes de que existiera la
+     relacion con el horario no trae el campo, y exigirlo lo dejaria invalido. */
+  subjectId: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
   tagIds: z.array(z.string()),
   subtasks: z.array(subtaskSchema),
   attachments: z.array(attachmentSchema),
@@ -149,6 +155,10 @@ export const subjectBackupSchema = z.object({
   teacherCode: z.string().nullable(),
   teacherName: z.string().nullable(),
   color: z.string(),
+  attention: z
+    .enum(['critical', 'watch', 'normal', 'relaxed'])
+    .nullish()
+    .transform((value) => value ?? 'normal'),
   termCode: z.string(),
   startsOn: calendarDate,
   endsOn: calendarDate,
@@ -175,6 +185,19 @@ export const scheduleBlockBackupSchema = z.object({
   deletedAt: nullableIso,
 });
 
+export const subjectNoteBackupSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  subjectId: z.string(),
+  kind: z.enum(['exam', 'assignment', 'notice', 'note']),
+  body: z.string(),
+  isPinned: z.boolean(),
+  position: z.number(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+  deletedAt: nullableIso,
+});
+
 export const backupFileSchema = z.object({
   format: z.literal(BACKUP_FORMAT_ID),
   version: z.number().int().min(1).max(BACKUP_VERSION),
@@ -190,6 +213,7 @@ export const backupFileSchema = z.object({
        tareas por culpa de una funcion que no usaba. */
     subjects: z.array(subjectBackupSchema).default([]),
     scheduleBlocks: z.array(scheduleBlockBackupSchema).default([]),
+    subjectNotes: z.array(subjectNoteBackupSchema).default([]),
   }),
 });
 

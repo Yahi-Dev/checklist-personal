@@ -6,6 +6,7 @@ import type {
   FocusSessionId,
   ScheduleBlockId,
   SubjectId,
+  SubjectNoteId,
   TagId,
   TaskId,
   UserId,
@@ -23,6 +24,8 @@ import type {
   FocusSessionRepository,
   ScheduleBlockQuery,
   ScheduleBlockRepository,
+  SubjectNoteQuery,
+  SubjectNoteRepository,
   SubjectQuery,
   SubjectRepository,
   TagRepository,
@@ -33,12 +36,14 @@ import type { FocusSession } from '../../src/domain/focus/focus-session';
 import type { Result } from '../../src/domain/shared/result';
 import type { ScheduleBlock } from '../../src/domain/schedule/schedule-block';
 import type { Subject } from '../../src/domain/schedule/subject';
+import type { SubjectNote } from '../../src/domain/schedule/subject-note';
 import type { Tag } from '../../src/domain/tag/tag';
 import type { Task } from '../../src/domain/task/task';
 import type { UseCaseContext } from '../../src/application/use-cases/use-case';
 
 import { brandId } from '../../src/domain/shared/branded';
 import { FixedClock } from '../../src/domain/shared/clock';
+import { bySubjectNoteOrder } from '../../src/domain/schedule/subject-note';
 import { DomainErrors } from '../../src/domain/shared/domain-error';
 import { err, ok } from '../../src/domain/shared/result';
 import { ReminderScheduler } from '../../src/application/services/reminder-scheduler';
@@ -262,6 +267,39 @@ export class InMemorySubjectRepository implements SubjectRepository {
   }
 }
 
+export class InMemorySubjectNoteRepository implements SubjectNoteRepository {
+  readonly items = new Map<string, SubjectNote>();
+
+  async findById(id: SubjectNoteId): Promise<Result<SubjectNote | null>> {
+    return ok(this.items.get(id) ?? null);
+  }
+
+  async findAll(query: SubjectNoteQuery = {}): Promise<Result<SubjectNote[]>> {
+    const all = [...this.items.values()].filter(
+      (item) => query.subjectId === undefined || item.subjectId === query.subjectId,
+    );
+
+    const visible = query.includeDeleted === true ? all : all.filter((i) => i.deletedAt === null);
+
+    return ok([...visible].sort(bySubjectNoteOrder));
+  }
+
+  async save(note: SubjectNote): Promise<Result<SubjectNote>> {
+    this.items.set(note.id, note);
+    return ok(note);
+  }
+
+  async saveMany(notes: readonly SubjectNote[]): Promise<Result<SubjectNote[]>> {
+    for (const note of notes) this.items.set(note.id, note);
+    return ok([...notes]);
+  }
+
+  async hardDelete(id: SubjectNoteId): Promise<Result<void>> {
+    this.items.delete(id);
+    return ok(undefined);
+  }
+}
+
 export class InMemoryScheduleBlockRepository implements ScheduleBlockRepository {
   readonly items = new Map<string, ScheduleBlock>();
 
@@ -336,6 +374,7 @@ export interface TestHarness {
   readonly focusSessions: InMemoryFocusSessionRepository;
   readonly subjects: InMemorySubjectRepository;
   readonly scheduleBlocks: InMemoryScheduleBlockRepository;
+  readonly subjectNotes: InMemorySubjectNoteRepository;
   readonly pdf: StubPdfTextExtractor;
   readonly clock: FixedClock;
   readonly notifications: {
@@ -359,6 +398,7 @@ export const createTestHarness = (
   const focusSessions = new InMemoryFocusSessionRepository();
   const subjects = new InMemorySubjectRepository();
   const scheduleBlocks = new InMemoryScheduleBlockRepository();
+  const subjectNotes = new InMemorySubjectNoteRepository();
   const pdf = new StubPdfTextExtractor();
 
   const notifications = {
@@ -398,6 +438,7 @@ export const createTestHarness = (
     focusSessions,
     subjects,
     scheduleBlocks,
+    subjectNotes,
     pdf,
     clock,
     ids,
@@ -422,6 +463,7 @@ export const createTestHarness = (
     focusSessions,
     subjects,
     scheduleBlocks,
+    subjectNotes,
     pdf,
     clock,
     notifications,

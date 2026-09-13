@@ -5,6 +5,8 @@ import type { TestHarness } from '../support/test-context';
 import { createTestHarness } from '../support/test-context';
 import { HORARIO_2027_1 } from '../support/unibe-schedule-fixture';
 import { ImportSchedulePdfUseCase } from '../../src/application/use-cases/schedule/import-schedule-pdf';
+import { CreateSubjectNoteUseCase } from '../../src/application/use-cases/schedule/subject-note-commands';
+import { CreateTaskUseCase } from '../../src/application/use-cases/task/task-commands';
 import { isErr, unwrap } from '../../src/domain/shared/result';
 import {
   ExportBackupUseCase,
@@ -62,6 +64,35 @@ describe('el horario en los respaldos', () => {
     expect(logica?.termCode).toBe('2027-1');
   });
 
+  it('lleva las notas, la atencion y la materia de cada tarea', async () => {
+    const logica = [...harness.subjects.items.values()].find((item) => item.code === 'TI3210');
+    if (logica === undefined) throw new Error('falta TI3210');
+
+    await harness.subjects.save({ ...logica, attention: 'critical' });
+    await new CreateSubjectNoteUseCase(harness.context).execute({
+      subjectId: logica.id,
+      body: 'Entra hasta el capitulo 4',
+      kind: 'exam',
+    });
+    await new CreateTaskUseCase(harness.context).execute({
+      title: 'Ejercicios del 3',
+      subjectId: logica.id,
+    });
+
+    const backup = unwrap(await new ExportBackupUseCase(harness.context).execute());
+    expect(backup.counts.subjectNotes).toBe(1);
+
+    const limpio = createTestHarness();
+    unwrap(await new ImportBackupUseCase(limpio.context).execute({ contents: backup.contents }));
+
+    const restaurada = [...limpio.subjects.items.values()].find((item) => item.code === 'TI3210');
+    expect(restaurada?.attention).toBe('critical');
+    expect(limpio.subjectNotes.items.size).toBe(1);
+
+    const tarea = [...limpio.tasks.items.values()][0];
+    expect(tarea?.subjectId).toBe(logica.id);
+  });
+
   it('un respaldo de antes del horario sigue siendo valido', async () => {
     // El `.default([])` del esquema es lo que lo permite. Sin el, nadie podria restaurar
     // sus tareas por culpa de una funcion que cuando hizo la copia no existia.
@@ -79,6 +110,7 @@ describe('el horario en los respaldos', () => {
     if (!isErr(result)) {
       expect(result.value.imported.subjects).toBe(0);
       expect(result.value.imported.scheduleBlocks).toBe(0);
+      expect(result.value.imported.subjectNotes).toBe(0);
     }
   });
 

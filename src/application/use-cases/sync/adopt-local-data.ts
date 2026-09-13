@@ -115,6 +115,7 @@ export interface AdoptedDataSummary {
   readonly sesiones: number;
   readonly asignaturas: number;
   readonly clases: number;
+  readonly notas: number;
   /** Categorias por defecto intactas que se descartaron en vez de duplicarse. */
   readonly categoriasDescartadas: number;
 }
@@ -240,6 +241,18 @@ export class AdoptLocalDataUseCase implements UseCase<AdoptLocalDataCommand, Ado
       if (isErr(saved)) return saved;
     }
 
+    const notes = await this.context.subjectNotes.findAll({ includeDeleted: true });
+    if (isErr(notes)) return notes;
+
+    const orphanNotes = notes.value
+      .filter(isOrphan)
+      .map((note) => ({ ...note, userId: owner.id, updatedAt: now }));
+
+    if (orphanNotes.length > 0) {
+      const saved = await this.context.subjectNotes.saveMany(orphanNotes);
+      if (isErr(saved)) return saved;
+    }
+
     return ok({
       tareas: orphanTasks.length,
       categorias: adoptable.length,
@@ -247,6 +260,7 @@ export class AdoptLocalDataUseCase implements UseCase<AdoptLocalDataCommand, Ado
       sesiones: orphanSessions.length,
       asignaturas: orphanSubjects.length,
       clases: orphanBlocks.length,
+      notas: orphanNotes.length,
       categoriasDescartadas: discardable.length,
     });
   }
@@ -259,6 +273,7 @@ const EMPTY_SUMMARY: AdoptedDataSummary = {
   sesiones: 0,
   asignaturas: 0,
   clases: 0,
+  notas: 0,
   categoriasDescartadas: 0,
 };
 

@@ -5,10 +5,12 @@ import type { Category } from '../../domain/category/category';
 import type { FocusSession } from '../../domain/focus/focus-session';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { Subject } from '../../domain/schedule/subject';
+import type { SubjectNote } from '../../domain/schedule/subject-note';
 import type { Tag } from '../../domain/tag/tag';
 import type { Task } from '../../domain/task/task';
 import type { TaskId } from '../../domain/shared/branded';
 
+import { bySubjectNoteOrder } from '../../domain/schedule/subject-note';
 import { db } from '../../infrastructure/persistence/database';
 import { Outbox } from '../../infrastructure/persistence/outbox';
 import { stripHints } from '../../infrastructure/persistence/records';
@@ -141,6 +143,37 @@ export const useScheduleBlocks = (weekday?: number): ScheduleBlock[] | undefined
         );
     },
     [weekday],
+    undefined,
+  );
+
+export const useSubjectNotes = (subjectId?: string): SubjectNote[] | undefined =>
+  useLiveQuery(
+    async () => {
+      const records =
+        subjectId === undefined
+          ? await db.subjectNotes.where('_deleted').equals(0).toArray()
+          : await db.subjectNotes.where('[_deleted+subjectId]').equals([0, subjectId]).toArray();
+
+      return records.map((record) => stripHints<SubjectNote>(record)).sort(bySubjectNoteOrder);
+    },
+    [subjectId],
+    undefined,
+  );
+
+/** Las tareas de una materia. `null` pide las que NO tienen materia. */
+export const useTasksBySubject = (subjectId: string | null): Task[] | undefined =>
+  useLiveQuery(
+    async () => {
+      const records =
+        subjectId === null
+          ? await db.tasks.where('_deleted').equals(0).toArray()
+          : await db.tasks.where('[_deleted+subjectId]').equals([0, subjectId]).toArray();
+
+      const tasks = records.map((record) => stripHints<Task>(record));
+
+      return subjectId === null ? tasks.filter((task) => task.subjectId === null) : tasks;
+    },
+    [subjectId],
     undefined,
   );
 

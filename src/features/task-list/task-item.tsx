@@ -14,6 +14,7 @@ import {
 import { memo, useRef, useState } from 'react';
 
 import type { Category } from '../../domain/category/category';
+import type { Subject } from '../../domain/schedule/subject';
 import type { SnoozePreset } from '../../application/use-cases/task/task-commands';
 import type { Tag } from '../../domain/tag/tag';
 import type { Task } from '../../domain/task/task';
@@ -52,6 +53,7 @@ import { useTaskActions } from '../task-actions/use-task-actions';
 export interface TaskItemProps {
   task: Task;
   category?: Category | undefined;
+  subject?: Subject | undefined;
   tags?: readonly Tag[];
   /**
    * Instante de referencia para decidir si esta vencida.
@@ -94,6 +96,7 @@ export const TaskItem = memo(
   ({
     task,
     category,
+    subject,
     tags = [],
     now,
     entranceDelayMs = 0,
@@ -212,15 +215,29 @@ export const TaskItem = memo(
               </span>
             )}
 
-            {category !== undefined && (
+            {/* La materia SUSTITUYE a la categoria cuando la hay. Enseñar los dos chips
+                seria repetir casi lo mismo -"Universidad" junto a "TI3210"- y en una fila
+                estrecha el ruido se paga en lo que se deja de leer. */}
+            {subject !== undefined ? (
               <span className="inline-flex items-center gap-1 text-xs text-ink-soft">
                 <span
                   className="size-2 rounded-full"
-                  style={{ backgroundColor: category.color }}
+                  style={{ backgroundColor: subject.color }}
                   aria-hidden="true"
                 />
-                {category.name}
+                <span className="font-mono">{subject.code}</span>
               </span>
+            ) : (
+              category !== undefined && (
+                <span className="inline-flex items-center gap-1 text-xs text-ink-soft">
+                  <span
+                    className="size-2 rounded-full"
+                    style={{ backgroundColor: category.color }}
+                    aria-hidden="true"
+                  />
+                  {category.name}
+                </span>
+              )
             )}
 
             {tags.map((tag) => (
@@ -334,6 +351,8 @@ export const TaskItem = memo(
     previous.now === next.now &&
     previous.category?.id === next.category?.id &&
     previous.category?.color === next.category?.color &&
+    previous.subject?.id === next.subject?.id &&
+    previous.subject?.color === next.subject?.color &&
     previous.tags?.length === next.tags?.length &&
     previous.hideDueDate === next.hideDueDate,
 );

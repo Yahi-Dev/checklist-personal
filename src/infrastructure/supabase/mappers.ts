@@ -8,6 +8,8 @@ import type {
   Json,
   ScheduleBlockRow,
   ScheduleBlockUpsert,
+  SubjectNoteRow,
+  SubjectNoteUpsert,
   SubjectRow,
   SubjectUpsert,
   TagRow,
@@ -19,6 +21,7 @@ import type {
   CategoryId,
   ScheduleBlockId,
   SubjectId,
+  SubjectNoteId,
   TagId,
   TaskId,
   UserId,
@@ -27,11 +30,17 @@ import type { FocusSession } from '../../domain/focus/focus-session';
 import type { RecurrenceRule, Weekday } from '../../domain/recurrence/recurrence-rule';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { Subject } from '../../domain/schedule/subject';
+import type { SubjectNote } from '../../domain/schedule/subject-note';
 import type { Subtask } from '../../domain/task/subtask';
 import type { Tag } from '../../domain/tag/tag';
 import type { Task, TaskLocation } from '../../domain/task/task';
 
 import { brandId } from '../../domain/shared/branded';
+import {
+  DEFAULT_ATTENTION,
+  isAttentionLevel,
+} from '../../domain/schedule/value-objects/attention-level';
+import { isSubjectNoteKind } from '../../domain/schedule/subject-note';
 
 /**
  * Traduccion entre el modelo de dominio (camelCase) y las filas de Postgres (snake_case).
@@ -59,6 +68,7 @@ export const taskToRow = (task: Task): TaskUpsert => ({
   reminder_at: task.reminderAt,
   completed_at: task.completedAt,
   category_id: task.categoryId,
+  subject_id: task.subjectId,
   tag_ids: [...task.tagIds],
   subtasks: task.subtasks as unknown as Json,
   attachments: task.attachments as unknown as Json,
@@ -87,6 +97,10 @@ export const rowToTask = (row: TaskRow): Task => ({
   reminderAt: normalizeTimestamp(row.reminder_at),
   completedAt: normalizeTimestamp(row.completed_at),
   categoryId: row.category_id === null ? null : brandId<CategoryId>(row.category_id),
+  /* `?? null` y no `row.subject_id` a secas: durante la ventana en que el cliente ya
+     conoce la columna y el servidor todavia no, la fila llega SIN el campo y el valor es
+     `undefined`, que no es lo mismo que `null` para el resto del dominio. */
+  subjectId: row.subject_id == null ? null : brandId<SubjectId>(row.subject_id),
   tagIds: (row.tag_ids ?? []).map((id) => brandId<TagId>(id)),
   subtasks: asArray<Subtask>(row.subtasks),
   attachments: asArray<Attachment>(row.attachments),
@@ -202,6 +216,7 @@ export const subjectToRow = (subject: Subject): SubjectUpsert => ({
   teacher_code: subject.teacherCode,
   teacher_name: subject.teacherName,
   color: subject.color,
+  attention: subject.attention,
   term_code: subject.termCode,
   starts_on: subject.startsOn,
   ends_on: subject.endsOn,
@@ -221,6 +236,9 @@ export const rowToSubject = (row: SubjectRow): Subject => ({
   teacherCode: row.teacher_code,
   teacherName: row.teacher_name,
   color: row.color,
+  /* Mismo motivo que en la tarea: si el servidor aun no tiene la columna, aqui llega
+     `undefined` y dejaria una asignatura con un nivel de atencion imposible. */
+  attention: isAttentionLevel(row.attention) ? row.attention : DEFAULT_ATTENTION,
   termCode: row.term_code,
   /* `starts_on` es `date`, no `timestamptz`: ya viene como `AAAA-MM-DD` y pasarlo por
      `normalizeTimestamp` lo convertiria en un instante UTC y le restaria un dia a
@@ -262,6 +280,32 @@ export const rowToScheduleBlock = (row: ScheduleBlockRow): ScheduleBlock => ({
   isRemote: row.is_remote,
   startsOn: row.starts_on,
   endsOn: row.ends_on,
+  createdAt: normalizeTimestamp(row.created_at) ?? row.created_at,
+  updatedAt: normalizeTimestamp(row.updated_at) ?? row.updated_at,
+  deletedAt: normalizeTimestamp(row.deleted_at),
+});
+
+export const subjectNoteToRow = (note: SubjectNote): SubjectNoteUpsert => ({
+  id: note.id,
+  user_id: note.userId,
+  subject_id: note.subjectId,
+  kind: note.kind,
+  body: note.body,
+  is_pinned: note.isPinned,
+  position: note.position,
+  created_at: note.createdAt,
+  updated_at: note.updatedAt,
+  deleted_at: note.deletedAt,
+});
+
+export const rowToSubjectNote = (row: SubjectNoteRow): SubjectNote => ({
+  id: brandId<SubjectNoteId>(row.id),
+  userId: brandId<UserId>(row.user_id),
+  subjectId: brandId<SubjectId>(row.subject_id),
+  kind: isSubjectNoteKind(row.kind) ? row.kind : 'note',
+  body: row.body,
+  isPinned: row.is_pinned,
+  position: row.position,
   createdAt: normalizeTimestamp(row.created_at) ?? row.created_at,
   updatedAt: normalizeTimestamp(row.updated_at) ?? row.updated_at,
   deletedAt: normalizeTimestamp(row.deleted_at),

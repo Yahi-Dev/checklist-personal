@@ -1,13 +1,11 @@
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ScheduledClass } from '../../domain/schedule/weekly-schedule';
 import type { ClassModality } from '../../domain/schedule/value-objects/class-modality';
+import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { Weekday } from '../../domain/recurrence/recurrence-rule';
 
 import { Button } from '../../shared/ui/button';
-import { CATEGORY_COLORS } from '../../domain/category/category';
-import { cn } from '../../shared/lib/cn';
 import {
   CLASS_MODALITIES,
   CLASS_MODALITY_LABEL,
@@ -26,34 +24,33 @@ import { useScheduleActions } from './use-schedule-actions';
 import { WEEKDAY_LABEL, WEEKDAYS } from '../../domain/recurrence/recurrence-rule';
 
 /**
- * Editar una clase concreta.
+ * Editar UN tramo del horario: dia, hora, aula y modalidad.
  *
- * Lo que se toca aqui es el TRAMO -dia, hora, aula, modalidad- y el color de la
- * asignatura, que es lo unico suyo que se cambia a diario. El nombre, el codigo y la
- * seccion no se editan: vienen del documento oficial y cambiarlos a mano romperia la
- * clave natural con la que se reconcilia el siguiente import, de modo que la asignatura
- * editada se daria de baja y se crearia otra igual al lado.
+ * Antes esto era lo que se abria al tocar una clase, y era el gesto facil llevando a lo
+ * raro: cambiar un aula pasa dos o tres veces por cuatrimestre, mientras que consultar la
+ * materia pasa a diario. Ahora vive DENTRO de la hoja de la materia, detras del lapiz de
+ * cada tramo.
+ *
+ * El nombre, el codigo y la seccion no se editan aqui ni en ningun sitio: vienen del
+ * documento oficial y son la clave natural con la que se reconcilia el siguiente import.
+ * Cambiarlos a mano daria de baja la asignatura editada y crearia otra igual al lado.
  */
 
-export interface ClassDetailSheetProps {
-  readonly item: ScheduledClass | null;
+export interface ClassEditDialogProps {
+  readonly block: ScheduleBlock | null;
   readonly onClose: () => void;
 }
 
-export const ClassDetailSheet = ({ item, onClose }: ClassDetailSheetProps) => {
-  if (item === null) return null;
+export const ClassEditDialog = ({ block, onClose }: ClassEditDialogProps) => {
+  if (block === null) return null;
 
   /* El `key` es lo que rellena el formulario, y no un efecto que copie las props al
-     estado. Con el efecto, React avisa -con razon- de renders en cascada, y ademas
-     bastaba con que la clase se volviera a leer de IndexedDB para que lo que estabas
-     escribiendo en el aula desapareciera. Al remontar por id, el estado nace ya con los
-     valores correctos y nadie lo pisa despues. */
-  return <ClassForm key={item.block.id} item={item} onClose={onClose} />;
+     estado: asi el estado nace con los valores correctos y nadie lo pisa despues. */
+  return <ClassForm key={block.id} block={block} onClose={onClose} />;
 };
 
-const ClassForm = ({ item, onClose }: { item: ScheduledClass; onClose: () => void }) => {
+const ClassForm = ({ block, onClose }: { block: ScheduleBlock; onClose: () => void }) => {
   const actions = useScheduleActions();
-  const { block, subject } = item;
 
   const [startsAt, setStartsAt] = useState(block.startsAt);
   const [endsAt, setEndsAt] = useState(block.endsAt);
@@ -82,8 +79,9 @@ const ClassForm = ({ item, onClose }: { item: ScheduledClass; onClose: () => voi
       }}
     >
       <DialogContent
-        title={subject.name}
-        description={`${subject.code} · Seccion ${subject.section}`}
+        title="Editar clase"
+        description={`${WEEKDAY_LABEL[block.weekday]} · ${block.startsAt}`}
+        size="sm"
         footer={
           <div className="flex items-center justify-between gap-2">
             <Button
@@ -177,49 +175,6 @@ const ClassForm = ({ item, onClose }: { item: ScheduledClass; onClose: () => voi
               </SelectContent>
             </Select>
           </Field>
-
-          <Field label="Color de la asignatura" hint="Se aplica a todas sus clases.">
-            <div className="flex flex-wrap gap-2">
-              {CATEGORY_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  aria-label={`Color ${color}`}
-                  aria-pressed={subject.color === color}
-                  onClick={() => {
-                    void actions.updateSubject({ subjectId: subject.id, color });
-                  }}
-                  className={cn(
-                    'size-7 rounded-full transition-transform duration-200',
-                    'focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:outline-none',
-                    subject.color === color
-                      ? 'ring-2 ring-brand-500 ring-offset-2 ring-offset-panel'
-                      : 'hover:scale-110',
-                  )}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-          </Field>
-
-          {subject.teacherName !== null && (
-            <p className="text-xs text-ink-muted">
-              Profesor: {subject.teacherName}
-              {subject.teacherCode !== null && ` (${subject.teacherCode})`}
-            </p>
-          )}
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-danger"
-            onClick={() => {
-              void actions.deleteSubject(subject.id);
-              onClose();
-            }}
-          >
-            Quitar la asignatura entera
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

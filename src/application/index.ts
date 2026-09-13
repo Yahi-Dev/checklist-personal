@@ -9,6 +9,7 @@ export * from './use-cases/category/category-commands';
 export * from './use-cases/focus/focus-commands';
 export * from './use-cases/schedule/import-schedule-pdf';
 export * from './use-cases/schedule/schedule-commands';
+export * from './use-cases/schedule/subject-note-commands';
 export * from './use-cases/stats/get-productivity-snapshot';
 export * from './use-cases/tag/tag-commands';
 export * from './use-cases/task/attachment-commands';

@@ -44,6 +44,7 @@ export type TaskRow = {
   reminder_at: string | null;
   completed_at: string | null;
   category_id: string | null;
+  subject_id: string | null;
   tag_ids: string[];
   subtasks: Json;
   attachments: Json;
@@ -112,6 +113,7 @@ export type SubjectRow = {
   teacher_code: string | null;
   teacher_name: string | null;
   color: string;
+  attention: 'critical' | 'watch' | 'normal' | 'relaxed';
   term_code: string;
   starts_on: string | null;
   ends_on: string | null;
@@ -134,6 +136,20 @@ export type ScheduleBlockRow = {
   is_remote: boolean;
   starts_on: string | null;
   ends_on: string | null;
+  created_at: string;
+  updated_at: string;
+  server_updated_at: string;
+  deleted_at: string | null;
+};
+
+export type SubjectNoteRow = {
+  id: string;
+  user_id: string;
+  subject_id: string;
+  kind: 'exam' | 'assignment' | 'notice' | 'note';
+  body: string;
+  is_pinned: boolean;
+  position: number;
   created_at: string;
   updated_at: string;
   server_updated_at: string;
@@ -206,6 +222,13 @@ export type Database = {
         Update: Partial<ScheduleBlockRow>;
         Relationships: [];
       };
+      subject_notes: {
+        Row: SubjectNoteRow;
+        Insert: Omit<SubjectNoteRow, 'created_at' | 'updated_at' | 'server_updated_at'> &
+          Partial<Pick<SubjectNoteRow, 'created_at' | 'updated_at'>>;
+        Update: Partial<SubjectNoteRow>;
+        Relationships: [];
+      };
       push_subscriptions: {
         Row: PushSubscriptionRow;
         Insert: Omit<PushSubscriptionRow, 'id' | 'created_at' | 'last_used_at'> &
@@ -237,6 +260,7 @@ export type TagUpsert = Omit<TagRow, 'server_updated_at'>;
 export type FocusSessionUpsert = Omit<FocusSessionRow, 'server_updated_at'>;
 export type SubjectUpsert = Omit<SubjectRow, 'server_updated_at'>;
 export type ScheduleBlockUpsert = Omit<ScheduleBlockRow, 'server_updated_at'>;
+export type SubjectNoteUpsert = Omit<SubjectNoteRow, 'server_updated_at'>;
 
 /** Nombre de tabla remota para cada tipo de entidad de la cola de salida. */
 export const TABLE_FOR_ENTITY = {
@@ -246,4 +270,5 @@ export const TABLE_FOR_ENTITY = {
   focusSession: 'focus_sessions',
   subject: 'subjects',
   scheduleBlock: 'schedule_blocks',
+  subjectNote: 'subject_notes',
 } as const;

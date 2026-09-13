@@ -1,9 +1,11 @@
+import type { AttentionLevel } from './value-objects/attention-level';
 import type { CalendarDate } from '../shared/clock';
 import type { DomainError } from '../shared/domain-error';
 import type { IsoDateTime } from '../task/value-objects/iso-date-time';
 import type { Result } from '../shared/result';
 import type { SubjectId, UserId } from '../shared/branded';
 import { CATEGORY_COLORS } from '../category/category';
+import { DEFAULT_ATTENTION, isAttentionLevel } from './value-objects/attention-level';
 import { DomainErrors } from '../shared/domain-error';
 import { err, ok } from '../shared/result';
 
@@ -39,6 +41,12 @@ export interface Subject {
   readonly teacherCode: string | null;
   readonly teacherName: string | null;
   readonly color: string;
+  /**
+   * Cuanta atencion pide. Solo cambia como se pinta, nunca el color: el color es
+   * identidad -"la morada es Calculo"- y si ademas significara urgencia dejaria de
+   * servir para las dos cosas.
+   */
+  readonly attention: AttentionLevel;
   /** Cuatrimestre tal y como lo nombra la universidad, ej. `2027-1`. */
   readonly termCode: string;
   readonly startsOn: CalendarDate | null;
@@ -71,6 +79,7 @@ export interface CreateSubjectInput {
   readonly teacherCode?: string | null;
   readonly teacherName?: string | null;
   readonly color?: string;
+  readonly attention?: AttentionLevel;
   readonly startsOn?: CalendarDate | null;
   readonly endsOn?: CalendarDate | null;
   readonly position?: number;
@@ -136,6 +145,16 @@ export const createSubject = (input: CreateSubjectInput): Result<Subject> => {
     );
   }
 
+  const attention = input.attention ?? DEFAULT_ATTENTION;
+  if (!isAttentionLevel(attention)) {
+    return err(
+      DomainErrors.validation('Nivel de atencion no valido.', {
+        field: 'attention',
+        details: { received: input.attention },
+      }),
+    );
+  }
+
   const rangeError = validateRange(input.startsOn ?? null, input.endsOn ?? null);
   if (rangeError !== null) return err(rangeError);
 
@@ -149,6 +168,7 @@ export const createSubject = (input: CreateSubjectInput): Result<Subject> => {
     teacherCode: emptyToNull(input.teacherCode),
     teacherName: emptyToNull(input.teacherName),
     color,
+    attention,
     termCode,
     startsOn: input.startsOn ?? null,
     endsOn: input.endsOn ?? null,
@@ -167,6 +187,7 @@ export interface UpdateSubjectPatch {
   readonly teacherCode?: string | null;
   readonly teacherName?: string | null;
   readonly color?: string;
+  readonly attention?: AttentionLevel;
   readonly startsOn?: CalendarDate | null;
   readonly endsOn?: CalendarDate | null;
   readonly position?: number;
@@ -196,6 +217,9 @@ export const updateSubject = (
     teacherCode: patch.teacherCode !== undefined ? patch.teacherCode : subject.teacherCode,
     teacherName: patch.teacherName !== undefined ? patch.teacherName : subject.teacherName,
     color: patch.color ?? subject.color,
+    /* Al reimportar el PDF nadie pasa `attention`, asi que se conserva sola. Es lo mismo
+       que pasa con el color, y por el mismo motivo: no viene en el documento. */
+    attention: patch.attention ?? subject.attention,
     startsOn: patch.startsOn !== undefined ? patch.startsOn : subject.startsOn,
     endsOn: patch.endsOn !== undefined ? patch.endsOn : subject.endsOn,
     position: patch.position ?? subject.position,

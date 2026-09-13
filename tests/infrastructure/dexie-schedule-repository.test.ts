@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ScheduleBlock } from '../../src/domain/schedule/schedule-block';
-import type { ScheduleBlockId, SubjectId, UserId } from '../../src/domain/shared/branded';
+import type {
+  ScheduleBlockId,
+  SubjectId,
+  SubjectNoteId,
+  UserId,
+} from '../../src/domain/shared/branded';
 import type { Subject } from '../../src/domain/schedule/subject';
 import type { Weekday } from '../../src/domain/recurrence/recurrence-rule';
 
@@ -9,8 +14,10 @@ import { AppDatabase } from '../../src/infrastructure/persistence/database';
 import { brandId } from '../../src/domain/shared/branded';
 import { createScheduleBlock } from '../../src/domain/schedule/schedule-block';
 import { createSubject } from '../../src/domain/schedule/subject';
+import { createSubjectNote } from '../../src/domain/schedule/subject-note';
 import {
   DexieScheduleBlockRepository,
+  DexieSubjectNoteRepository,
   DexieSubjectRepository,
 } from '../../src/infrastructure/persistence/dexie-schedule-repositories';
 import { Outbox } from '../../src/infrastructure/persistence/outbox';
@@ -244,6 +251,79 @@ describe('repositorios del horario', () => {
     });
   });
 
+  describe('DexieSubjectNoteRepository', () => {
+    let notes: DexieSubjectNoteRepository;
+
+    beforeEach(() => {
+      notes = new DexieSubjectNoteRepository(database, outbox);
+    });
+
+    const makeNote = (subjectId: SubjectId, overrides: Record<string, unknown> = {}) =>
+      unwrap(
+        createSubjectNote({
+          id: brandId<SubjectNoteId>(
+            `00000000-0000-4000-a000-${String(++counter).padStart(12, '0')}`,
+          ),
+          userId: USER_ID,
+          subjectId,
+          body: 'Una observacion',
+          now: NOW,
+          ...overrides,
+        }),
+      );
+
+    it('filtra por materia con el indice compuesto', async () => {
+      // Es lo que prueba de verdad `[_deleted+subjectId]`: con el indice mal declarado
+      // esto devuelve vacio, y contra un doble en memoria pasaria igual.
+      const logica = makeSubject({ code: 'TI3210' });
+      const calculo = makeSubject({ code: 'EGC252' });
+      await subjects.saveMany([logica, calculo]);
+
+      await notes.saveMany([
+        makeNote(logica.id),
+        makeNote(logica.id, { kind: 'exam' }),
+        makeNote(calculo.id),
+      ]);
+
+      expect(unwrap(await notes.findAll({ subjectId: logica.id }))).toHaveLength(2);
+      expect(unwrap(await notes.findAll({ subjectId: calculo.id }))).toHaveLength(1);
+    });
+
+    it('devuelve las notas en el orden del dominio y no en el del indice', async () => {
+      // El orden -destacadas, luego por tipo, luego lo mas reciente- no es algo que
+      // IndexedDB sepa expresar. Repartirlo entre el indice y la pantalla seria la forma
+      // de que las dos listas acabaran ordenando distinto.
+      const subject = makeSubject();
+      await subjects.save(subject);
+
+      await notes.saveMany([
+        makeNote(subject.id, { kind: 'note', body: 'Apunte' }),
+        makeNote(subject.id, { kind: 'exam', body: 'Entra el 4' }),
+      ]);
+
+      const leidas = unwrap(await notes.findAll({ subjectId: subject.id }));
+
+      expect(leidas[0]?.kind).toBe('exam');
+    });
+
+    it('no devuelve las borradas y encola cada escritura', async () => {
+      const subject = makeSubject();
+      await subjects.save(subject);
+
+      const viva = makeNote(subject.id);
+      const baja = makeNote(subject.id);
+      await notes.saveMany([viva, { ...baja, deletedAt: NOW }]);
+
+      expect(unwrap(await notes.findAll({ subjectId: subject.id }))).toHaveLength(1);
+      expect(
+        unwrap(await notes.findAll({ subjectId: subject.id, includeDeleted: true })),
+      ).toHaveLength(2);
+
+      const pendientes = await outbox.pending();
+      expect(pendientes.filter((entry) => entry.entity === 'subjectNote')).toHaveLength(2);
+    });
+  });
+
   describe('wipe', () => {
     it('vacia tambien las dos tablas del horario', async () => {
       // Es el olvido que el compilador no caza: sin las tablas nuevas en `wipe()`, al
@@ -257,6 +337,7 @@ describe('repositorios del horario', () => {
 
       expect(await database.subjects.count()).toBe(0);
       expect(await database.scheduleBlocks.count()).toBe(0);
+      expect(await database.subjectNotes.count()).toBe(0);
       expect(await database.outbox.count()).toBe(0);
     });
   });

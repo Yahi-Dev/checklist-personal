@@ -5,6 +5,7 @@ import type {
   FocusSessionRecord,
   OutboxEntry,
   ScheduleBlockRecord,
+  SubjectNoteRecord,
   SubjectRecord,
   SyncMetaRecord,
   TagRecord,
@@ -29,6 +30,7 @@ export class AppDatabase extends Dexie {
   declare focusSessions: Table<FocusSessionRecord, string>;
   declare subjects: Table<SubjectRecord, string>;
   declare scheduleBlocks: Table<ScheduleBlockRecord, string>;
+  declare subjectNotes: Table<SubjectNoteRecord, string>;
   declare outbox: Table<OutboxEntry, number>;
   declare meta: Table<SyncMetaRecord, string>;
 
@@ -96,6 +98,24 @@ export class AppDatabase extends Dexie {
         'id, subjectId, weekday, startsAt, updatedAt, _deleted, _dirty, ' +
         '[_deleted+subjectId], [_deleted+weekday]',
     });
+
+    /**
+     * v4: la materia como hilo conductor.
+     *
+     * `tasks` se REDECLARA ENTERA, y eso no es un descuido. Dexie no añade indices a un
+     * almacen: sustituye su juego por el que se declare en la version nueva. Poner aqui
+     * solo `[_deleted+subjectId]` habria borrado los cinco indices que ya tenia, entre
+     * ellos el que sostiene la vista Hoy, y el sintoma habria sido una app lenta sin que
+     * nada fallara. De ahi que esten todos repetidos.
+     */
+    this.version(4).stores({
+      tasks:
+        'id, status, dueAt, categoryId, subjectId, updatedAt, seriesId, _deleted, _dirty, ' +
+        '[_deleted+status], [_deleted+status+dueAt], [_deleted+categoryId], ' +
+        '[_deleted+subjectId], *tagIds',
+
+      subjectNotes: 'id, subjectId, updatedAt, _deleted, _dirty, [_deleted+subjectId]',
+    });
   }
 
   /** Vacia todo. Solo lo usa el cierre de sesion y la resincronizacion completa. */
@@ -109,6 +129,7 @@ export class AppDatabase extends Dexie {
         this.focusSessions,
         this.subjects,
         this.scheduleBlocks,
+        this.subjectNotes,
         this.outbox,
         this.meta,
       ],
@@ -120,6 +141,7 @@ export class AppDatabase extends Dexie {
           this.focusSessions.clear(),
           this.subjects.clear(),
           this.scheduleBlocks.clear(),
+          this.subjectNotes.clear(),
           this.outbox.clear(),
           this.meta.clear(),
         ]);

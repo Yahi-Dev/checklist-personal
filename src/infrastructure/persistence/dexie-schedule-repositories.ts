@@ -2,15 +2,19 @@ import type { AppDatabase } from './database';
 import type { Outbox } from './outbox';
 import type { Result } from '../../domain/shared/result';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
-import type { ScheduleBlockId, SubjectId } from '../../domain/shared/branded';
+import type { ScheduleBlockId, SubjectId, SubjectNoteId } from '../../domain/shared/branded';
 import type {
   ScheduleBlockQuery,
   ScheduleBlockRepository,
+  SubjectNoteQuery,
+  SubjectNoteRepository,
   SubjectQuery,
   SubjectRepository,
 } from '../../application/ports/repositories';
 import type { Subject } from '../../domain/schedule/subject';
+import type { SubjectNote } from '../../domain/schedule/subject-note';
 
+import { bySubjectNoteOrder } from '../../domain/schedule/subject-note';
 import { fromPromise, ok } from '../../domain/shared/result';
 import { stripHints, withHints } from './records';
 import { toDomainError } from '../../domain/shared/domain-error';
@@ -224,5 +228,92 @@ export class DexieScheduleBlockRepository implements ScheduleBlockRepository {
     return includeDeleted
       ? this.database.scheduleBlocks.toArray()
       : this.database.scheduleBlocks.where('_deleted').equals(0).toArray();
+  }
+}
+
+export class DexieSubjectNoteRepository implements SubjectNoteRepository {
+  constructor(
+    private readonly database: AppDatabase,
+    private readonly outbox: Outbox,
+  ) {}
+
+  async findById(id: SubjectNoteId): Promise<Result<SubjectNote | null>> {
+    return fromPromise(
+      this.database.subjectNotes
+        .get(id)
+        .then((record) => (record === undefined ? null : stripHints<SubjectNote>(record))),
+      (cause) => toDomainError(cause, 'No se pudo leer la nota.'),
+    );
+  }
+
+  async findAll(query: SubjectNoteQuery = {}): Promise<Result<SubjectNote[]>> {
+    return fromPromise(
+      (async () => {
+        const includeDeleted = query.includeDeleted === true;
+
+        const records =
+          query.subjectId === undefined
+            ? includeDeleted
+              ? await this.database.subjectNotes.toArray()
+              : await this.database.subjectNotes.where('_deleted').equals(0).toArray()
+            : includeDeleted
+              ? await this.database.subjectNotes
+                  .where('subjectId')
+                  .equals(query.subjectId)
+                  .toArray()
+              : await this.database.subjectNotes
+                  .where('[_deleted+subjectId]')
+                  .equals([0, query.subjectId])
+                  .toArray();
+
+        /* El orden lo decide el DOMINIO y no el indice: "destacadas primero, luego por
+           tipo, luego lo mas reciente" no es un orden que IndexedDB sepa expresar, y
+           repartirlo entre el indice y la pantalla seria la forma de que las dos listas
+           acabaran ordenando distinto. */
+        return records.map((record) => stripHints<SubjectNote>(record)).sort(bySubjectNoteOrder);
+      })(),
+      (cause) => toDomainError(cause, 'No se pudieron leer las notas.'),
+    );
+  }
+
+  async save(note: SubjectNote): Promise<Result<SubjectNote>> {
+    return fromPromise(
+      this.database.transaction(
+        'rw',
+        [this.database.subjectNotes, this.database.outbox],
+        async () => {
+          await this.database.subjectNotes.put(withHints(note, true));
+          await this.outbox.enqueue('subjectNote', note.id, 'upsert', note, note.updatedAt);
+          return note;
+        },
+      ),
+      (cause) => toDomainError(cause, 'No se pudo guardar la nota.'),
+    );
+  }
+
+  async saveMany(notes: readonly SubjectNote[]): Promise<Result<SubjectNote[]>> {
+    if (notes.length === 0) return ok([]);
+
+    return fromPromise(
+      this.database.transaction(
+        'rw',
+        [this.database.subjectNotes, this.database.outbox],
+        async () => {
+          await this.database.subjectNotes.bulkPut(notes.map((note) => withHints(note, true)));
+          await this.outbox.enqueueMany(
+            'subjectNote',
+            notes.map((note) => ({ id: note.id, updatedAt: note.updatedAt, payload: note })),
+          );
+          return [...notes];
+        },
+      ),
+      (cause) => toDomainError(cause, 'No se pudieron guardar las notas.'),
+    );
+  }
+
+  async hardDelete(id: SubjectNoteId): Promise<Result<void>> {
+    return fromPromise(this.database.subjectNotes.delete(id), (cause) =>
+      toDomainError(cause, 'No se pudo borrar la nota.'),
+    );
   }
 }

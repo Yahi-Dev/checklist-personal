@@ -4,6 +4,7 @@ import type {
   FocusSessionId,
   ScheduleBlockId,
   SubjectId,
+  SubjectNoteId,
   TagId,
   TaskId,
   UserId,
@@ -13,6 +14,7 @@ import type { IsoDateTime } from '../../domain/task/value-objects/iso-date-time'
 import type { Result } from '../../domain/shared/result';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { Subject } from '../../domain/schedule/subject';
+import type { SubjectNote } from '../../domain/schedule/subject-note';
 import type { Tag } from '../../domain/tag/tag';
 import type { Task } from '../../domain/task/task';
 
@@ -31,6 +33,7 @@ export interface TaskQuery {
   readonly includeDeleted?: boolean;
   readonly statuses?: readonly Task['status'][];
   readonly categoryId?: CategoryId | null;
+  readonly subjectId?: SubjectId | null;
   readonly updatedSince?: IsoDateTime;
   readonly limit?: number;
 }
@@ -93,6 +96,19 @@ export interface ScheduleBlockQuery {
   readonly subjectId?: SubjectId;
   /** 0 = domingo ... 6 = sabado. */
   readonly weekday?: number;
+}
+
+export interface SubjectNoteQuery {
+  readonly includeDeleted?: boolean;
+  readonly subjectId?: SubjectId;
+}
+
+export interface SubjectNoteRepository {
+  findById(id: SubjectNoteId): Promise<Result<SubjectNote | null>>;
+  findAll(query?: SubjectNoteQuery): Promise<Result<SubjectNote[]>>;
+  save(note: SubjectNote): Promise<Result<SubjectNote>>;
+  saveMany(notes: readonly SubjectNote[]): Promise<Result<SubjectNote[]>>;
+  hardDelete(id: SubjectNoteId): Promise<Result<void>>;
 }
 
 export interface ScheduleBlockRepository {

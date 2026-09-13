@@ -4,7 +4,8 @@ import { useCallback, useMemo } from 'react';
 import type { DomainError } from '../../domain/shared/domain-error';
 import type { ImportScheduleSummary } from '../../application/use-cases/schedule/import-schedule-pdf';
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
-import type { ScheduleBlockId, SubjectId } from '../../domain/shared/branded';
+import type { ScheduleBlockId, SubjectId, SubjectNoteId } from '../../domain/shared/branded';
+import type { SubjectNote } from '../../domain/schedule/subject-note';
 import type { Subject } from '../../domain/schedule/subject';
 import type {
   CreateScheduleBlockCommand,
@@ -12,10 +13,20 @@ import type {
   UpdateScheduleBlockCommand,
   UpdateSubjectCommand,
 } from '../../application/use-cases/schedule/schedule-commands';
+import type {
+  CreateSubjectNoteCommand,
+  UpdateSubjectNoteCommand,
+} from '../../application/use-cases/schedule/subject-note-commands';
 
 import { getContainer } from '../../infrastructure/di/container';
 import { ImportSchedulePdfUseCase } from '../../application/use-cases/schedule/import-schedule-pdf';
 import { isErr } from '../../domain/shared/result';
+import {
+  CreateSubjectNoteUseCase,
+  DeleteSubjectNoteUseCase,
+  ToggleSubjectNotePinnedUseCase,
+  UpdateSubjectNoteUseCase,
+} from '../../application/use-cases/schedule/subject-note-commands';
 import {
   CreateScheduleBlockUseCase,
   CreateSubjectUseCase,
@@ -50,6 +61,10 @@ export interface ScheduleActions {
   updateBlock: (command: UpdateScheduleBlockCommand) => Promise<ScheduleBlock | null>;
   deleteBlock: (blockId: ScheduleBlockId) => Promise<void>;
   deleteTerm: (termCode: string) => Promise<void>;
+  createNote: (command: CreateSubjectNoteCommand) => Promise<SubjectNote | null>;
+  updateNote: (command: UpdateSubjectNoteCommand) => Promise<SubjectNote | null>;
+  toggleNotePinned: (noteId: SubjectNoteId) => Promise<void>;
+  deleteNote: (noteId: SubjectNoteId) => Promise<void>;
 }
 
 export const useScheduleActions = (): ScheduleActions => {
@@ -65,6 +80,10 @@ export const useScheduleActions = (): ScheduleActions => {
       updateBlock: new UpdateScheduleBlockUseCase(container.context),
       deleteBlock: new DeleteScheduleBlockUseCase(container.context),
       deleteTerm: new DeleteTermUseCase(container.context),
+      createNote: new CreateSubjectNoteUseCase(container.context),
+      updateNote: new UpdateSubjectNoteUseCase(container.context),
+      toggleNotePinned: new ToggleSubjectNotePinnedUseCase(container.context),
+      deleteNote: new DeleteSubjectNoteUseCase(container.context),
     }),
     [container],
   );
@@ -187,6 +206,47 @@ export const useScheduleActions = (): ScheduleActions => {
     [useCases],
   );
 
+  const createNote = useCallback(
+    async (command: CreateSubjectNoteCommand) => {
+      const result = await useCases.createNote.execute(command);
+      if (isErr(result)) {
+        showError(result.error);
+        return null;
+      }
+      return result.value;
+    },
+    [useCases],
+  );
+
+  const updateNote = useCallback(
+    async (command: UpdateSubjectNoteCommand) => {
+      const result = await useCases.updateNote.execute(command);
+      if (isErr(result)) {
+        showError(result.error);
+        return null;
+      }
+      return result.value;
+    },
+    [useCases],
+  );
+
+  const toggleNotePinned = useCallback(
+    async (noteId: SubjectNoteId) => {
+      const result = await useCases.toggleNotePinned.execute({ noteId });
+      if (isErr(result)) showError(result.error);
+    },
+    [useCases],
+  );
+
+  const deleteNote = useCallback(
+    async (noteId: SubjectNoteId) => {
+      const result = await useCases.deleteNote.execute({ noteId });
+      if (isErr(result)) showError(result.error);
+      else toast('Nota borrada');
+    },
+    [useCases],
+  );
+
   return {
     previewImport,
     importPdf,
@@ -197,5 +257,9 @@ export const useScheduleActions = (): ScheduleActions => {
     updateBlock,
     deleteBlock,
     deleteTerm,
+    createNote,
+    updateNote,
+    toggleNotePinned,
+    deleteNote,
   };
 };

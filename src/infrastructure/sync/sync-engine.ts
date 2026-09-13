@@ -10,6 +10,7 @@ import type {
   CategoryRow,
   FocusSessionRow,
   ScheduleBlockRow,
+  SubjectNoteRow,
   SubjectRow,
   TagRow,
   TaskRow,
@@ -38,9 +39,11 @@ import {
   rowToFocusSession,
   rowToScheduleBlock,
   rowToSubject,
+  rowToSubjectNote,
   rowToTag,
   rowToTask,
   scheduleBlockToRow,
+  subjectNoteToRow,
   subjectToRow,
   tagToRow,
   taskToRow,
@@ -440,6 +443,7 @@ export class SyncEngine implements SyncService {
       'focusSession',
       'subject',
       'scheduleBlock',
+      'subjectNote',
     ];
     const failures: string[] = [];
 
@@ -569,6 +573,8 @@ export class SyncEngine implements SyncService {
         return subjectToRow(payload as Parameters<typeof subjectToRow>[0]);
       case 'scheduleBlock':
         return scheduleBlockToRow(payload as Parameters<typeof scheduleBlockToRow>[0]);
+      case 'subjectNote':
+        return subjectNoteToRow(payload as Parameters<typeof subjectNoteToRow>[0]);
       default: {
         /* Guardia de exhaustividad. Antes habia un `throw` a secas y eso ANULABA la
            comprobacion del compilador: añadir un tipo de entidad nuevo y olvidarse de
@@ -669,6 +675,7 @@ export class SyncEngine implements SyncService {
     await this.pullTolerant('scheduleBlock', userId, (since) =>
       this.pullScheduleBlocks(userId, since),
     );
+    await this.pullTolerant('subjectNote', userId, (since) => this.pullSubjectNotes(userId, since));
   }
 
   /**
@@ -877,6 +884,36 @@ export class SyncEngine implements SyncService {
     return watermark;
   }
 
+  private async pullSubjectNotes(userId: string, since: string): Promise<string> {
+    const { data, error } = await this.supabase
+      .from('subject_notes')
+      .select('*')
+      .eq('user_id', userId)
+      .gt('server_updated_at', since)
+      .order('server_updated_at', { ascending: true });
+
+    if (error !== null) {
+      if (isMissingTable(error.code)) throw new RemoteSchemaBehind('la tabla "subject_notes"');
+      throw new Error(`Fallo al bajar las notas: ${error.message}`);
+    }
+
+    let watermark = since;
+
+    for (const row of (data ?? []) as SubjectNoteRow[]) {
+      const remote = rowToSubjectNote(row);
+      await this.applyRemote(
+        this.database.subjectNotes,
+        'subjectNote',
+        remote.id,
+        remote,
+        remote.updatedAt,
+      );
+      watermark = maxIso(watermark, row.server_updated_at);
+    }
+
+    return watermark;
+  }
+
   /**
    * Escribe una fila remota en la copia local resolviendo el conflicto.
    *
@@ -939,6 +976,8 @@ export class SyncEngine implements SyncService {
         return this.database.subjects;
       case 'scheduleBlock':
         return this.database.scheduleBlocks;
+      case 'subjectNote':
+        return this.database.subjectNotes;
       default: {
         // Mismo motivo que en `toRow`: sin esto el `switch` deja de ser exhaustivo y
         // olvidar un caso hace que su `_dirty` no baje nunca y se reenvie sin fin.
@@ -991,6 +1030,7 @@ export class SyncEngine implements SyncService {
         this.database.focusSessions.clear(),
         this.database.subjects.clear(),
         this.database.scheduleBlocks.clear(),
+        this.database.subjectNotes.clear(),
       ]);
       for (const entity of SYNCABLE_ENTITIES) {
         await this.database.setMeta(pullCursorKey(entity, userId), EPOCH);
@@ -1057,6 +1097,14 @@ export class SyncEngine implements SyncService {
           'scheduleBlock',
           payload,
           rowToScheduleBlock,
+        );
+      })
+      .on('postgres_changes', { ...watch, table: 'subject_notes' }, (payload) => {
+        void this.applyRealtimeChange(
+          this.database.subjectNotes,
+          'subjectNote',
+          payload,
+          rowToSubjectNote,
         );
       })
       .subscribe((status) => {

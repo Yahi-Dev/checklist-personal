@@ -1,4 +1,4 @@
-import type { CategoryId, SubtaskId, TagId, TaskId, UserId } from '../shared/branded';
+import type { CategoryId, SubjectId, SubtaskId, TagId, TaskId, UserId } from '../shared/branded';
 import type { Attachment } from './attachment';
 import type { IsoDateTime } from './value-objects/iso-date-time';
 import type { Priority } from './value-objects/priority';
@@ -56,6 +56,15 @@ export interface Task {
   readonly reminderAt: IsoDateTime | null;
   readonly completedAt: IsoDateTime | null;
   readonly categoryId: CategoryId | null;
+  /**
+   * Materia del horario a la que pertenece, si es una tarea de clase.
+   *
+   * Es una COLUMNA y no una entidad aparte a proposito. Asi "el informe de Calculo" es
+   * una tarea de pleno derecho -aparece en Hoy, vence, avisa, tiene subtareas, la ve el
+   * asistente- en vez de un pariente pobre que vive dentro del horario. Una entidad
+   * propia habria producido dos listas de pendientes que no se hablan.
+   */
+  readonly subjectId: SubjectId | null;
   readonly tagIds: readonly TagId[];
   readonly subtasks: readonly Subtask[];
   readonly attachments: readonly Attachment[];
@@ -90,6 +99,7 @@ export interface CreateTaskInput {
   readonly isAllDay?: boolean;
   readonly reminderAt?: IsoDateTime | null;
   readonly categoryId?: CategoryId | null;
+  readonly subjectId?: SubjectId | null;
   readonly tagIds?: readonly TagId[];
   readonly recurrence?: RecurrenceRule | null;
   readonly position?: number;
@@ -137,6 +147,7 @@ export const createTask = (input: CreateTaskInput): Result<Task> =>
       reminderAt,
       completedAt: null,
       categoryId: input.categoryId ?? null,
+      subjectId: input.subjectId ?? null,
       tagIds: [...new Set(input.tagIds ?? [])],
       subtasks: [],
       attachments: [],
@@ -166,6 +177,7 @@ export interface UpdateTaskPatch {
   readonly isAllDay?: boolean;
   readonly reminderAt?: IsoDateTime | null;
   readonly categoryId?: CategoryId | null;
+  readonly subjectId?: SubjectId | null;
   readonly tagIds?: readonly TagId[];
   readonly recurrence?: RecurrenceRule | null;
   readonly estimatedPomodoros?: number | null;
@@ -213,6 +225,7 @@ export const updateTask = (task: Task, patch: UpdateTaskPatch, now: IsoDateTime)
     isAllDay: patch.isAllDay ?? task.isAllDay,
     reminderAt,
     categoryId: patch.categoryId !== undefined ? patch.categoryId : task.categoryId,
+    subjectId: patch.subjectId !== undefined ? patch.subjectId : task.subjectId,
     tagIds: patch.tagIds !== undefined ? [...new Set(patch.tagIds)] : task.tagIds,
     recurrence,
     estimatedPomodoros: estimated,

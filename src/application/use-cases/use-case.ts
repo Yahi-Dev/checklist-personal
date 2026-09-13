@@ -4,6 +4,7 @@ import type {
   CurrentUser,
   FocusSessionRepository,
   ScheduleBlockRepository,
+  SubjectNoteRepository,
   SubjectRepository,
   TagRepository,
   TaskRepository,
@@ -51,6 +52,7 @@ export interface UseCaseContext {
   readonly focusSessions: FocusSessionRepository;
   readonly subjects: SubjectRepository;
   readonly scheduleBlocks: ScheduleBlockRepository;
+  readonly subjectNotes: SubjectNoteRepository;
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly notifications: NotificationService;

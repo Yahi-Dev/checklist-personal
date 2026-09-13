@@ -1,3 +1,4 @@
+import type { AttentionLevel } from '../../../domain/schedule/value-objects/attention-level';
 import type { CalendarDate } from '../../../domain/shared/clock';
 import type { ClassModality } from '../../../domain/schedule/value-objects/class-modality';
 import type { Result } from '../../../domain/shared/result';
@@ -15,6 +16,7 @@ import {
   updateScheduleBlock,
 } from '../../../domain/schedule/schedule-block';
 import { createSubject, softDeleteSubject, updateSubject } from '../../../domain/schedule/subject';
+import { softDeleteSubjectNote } from '../../../domain/schedule/subject-note';
 import { DomainErrors } from '../../../domain/shared/domain-error';
 import { err, isErr, ok } from '../../../domain/shared/result';
 
@@ -105,6 +107,7 @@ export class CreateSubjectUseCase implements UseCase<CreateSubjectCommand, Subje
 
 export interface UpdateSubjectCommand {
   readonly subjectId: SubjectId;
+  readonly attention?: AttentionLevel;
   readonly code?: string;
   readonly name?: string;
   readonly section?: string;
@@ -138,11 +141,15 @@ export interface DeleteSubjectCommand {
 }
 
 /**
- * Borra la asignatura Y sus tramos, siempre en logico.
+ * Borra la asignatura Y todo lo que cuelga de ella, siempre en logico.
  *
- * Dejar los tramos vivos no se notaria en esta pantalla -el constructor de la semana
- * descarta los que no tienen asignatura- pero seguirian ocupando sitio, viajando por la
- * sincronizacion para siempre y reapareciendo si algun dia se restaura la asignatura.
+ * Dejar los tramos o las notas vivos no se notaria en pantalla -el constructor de la
+ * semana descarta lo que no tiene asignatura- pero seguirian ocupando sitio, viajando por
+ * la sincronizacion para siempre y reapareciendo si algun dia se restaura la asignatura.
+ *
+ * Las TAREAS son la excepcion y se quedan: una tarea es tuya, no de la materia, y quitar
+ * una asignatura del horario no puede borrarte trabajo. Se quedan sin materia -la clave
+ * foranea es `on delete set null`- y siguen en Hoy como cualquier otra.
  */
 export class DeleteSubjectUseCase implements UseCase<DeleteSubjectCommand, void> {
   constructor(private readonly context: UseCaseContext) {}
@@ -161,6 +168,14 @@ export class DeleteSubjectUseCase implements UseCase<DeleteSubjectCommand, void>
       blocks.value.map((block) => softDeleteScheduleBlock(block, now)),
     );
     if (isErr(savedBlocks)) return savedBlocks;
+
+    const notes = await this.context.subjectNotes.findAll({ subjectId: command.subjectId });
+    if (isErr(notes)) return notes;
+
+    const savedNotes = await this.context.subjectNotes.saveMany(
+      notes.value.map((note) => softDeleteSubjectNote(note, now)),
+    );
+    if (isErr(savedNotes)) return savedNotes;
 
     const saved = await this.context.subjects.save(softDeleteSubject(found.value, now));
     if (isErr(saved)) return saved;

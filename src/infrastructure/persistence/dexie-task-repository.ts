@@ -119,6 +119,11 @@ export class DexieTaskRepository implements TaskRepository {
         .where('[_deleted+categoryId]')
         .equals([0, query.categoryId])
         .toArray();
+    } else if (query.subjectId !== undefined && query.subjectId !== null && !includeDeleted) {
+      records = await this.database.tasks
+        .where('[_deleted+subjectId]')
+        .equals([0, query.subjectId])
+        .toArray();
     } else if (query.statuses?.length === 1 && !includeDeleted) {
       records = await this.database.tasks
         .where('[_deleted+status]')
@@ -143,6 +148,13 @@ export class DexieTaskRepository implements TaskRepository {
 
     if (query.categoryId !== undefined) {
       result = result.filter((record) => record.categoryId === query.categoryId);
+    }
+
+    /* Se vuelve a filtrar aunque el indice ya lo hiciera: la rama indexada solo entra
+       cuando `subjectId` es el UNICO criterio, y `subjectId: null` -"las tareas sueltas"-
+       no tiene indice que la sirva. */
+    if (query.subjectId !== undefined) {
+      result = result.filter((record) => record.subjectId === query.subjectId);
     }
 
     if (query.limit !== undefined) {

@@ -78,6 +78,25 @@ describe('ImportSchedulePdfUseCase', () => {
     expect(despues?.color).toBe('#22c55e');
   });
 
+  it('conserva el nivel de atencion al reimportar', async () => {
+    // Misma razon que el color: la atencion no viene en el documento, asi que reimportar
+    // no puede tocarla. Es lo que hace util marcar una materia como critica en la semana
+    // 3 y que siga marcada en la 12.
+    await importar();
+
+    const antes = [...harness.subjects.items.values()].find((item) => item.code === 'EGC270');
+    if (antes === undefined) throw new Error('falta EGC270');
+    expect(antes.attention).toBe('normal');
+
+    await harness.subjects.save({ ...antes, attention: 'critical' });
+    await importar();
+
+    const despues = harness.subjects.items.get(antes.id);
+    expect(despues?.attention).toBe('critical');
+    // Y lo que SI viene en el documento se sigue actualizando.
+    expect(despues?.name).toBe('FÍSICA GENERAL II');
+  });
+
   it('actualiza el aula sin perder el id de la clase', async () => {
     // Un cambio de aula tiene que leerse como edicion del mismo tramo. Si se borrara y
     // se creara otro, cada cambio de aula gastaria un id nuevo y la cola de salida

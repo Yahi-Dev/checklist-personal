@@ -2,6 +2,8 @@ import { Building2, ChevronRight, DoorOpen, Globe } from 'lucide-react';
 
 import type { ScheduleDay, ScheduledClass } from '../../domain/schedule/weekly-schedule';
 
+import type { AttentionLevel } from '../../domain/schedule/value-objects/attention-level';
+
 import { Badge } from '../../shared/ui/feedback';
 import { cn } from '../../shared/lib/cn';
 import {
@@ -41,6 +43,28 @@ export interface ScheduleDayCardProps {
    mantiene la barrita del hueco exactamente sobre el hilo del dia. Con dos rejillas
    distintas se desalinean en cuanto cambia el tamaño de la fuente. */
 const ROW_GRID = 'grid grid-cols-[4.25rem_0.75rem_1fr_auto] items-stretch gap-x-3';
+
+/**
+ * El nivel de atencion es UN diseño con un dial, no cuatro diseños.
+ *
+ * La tarjeta ya carga color de asignatura, icono de modalidad y los chips de HOY y Ahora.
+ * Estrenar una pinta distinta por nivel serian cuatro cosas compitiendo con lo que ya
+ * hay, y una pantalla donde todo grita es una donde nada destaca. Aqui solo sube o baja
+ * el peso visual de lo mismo.
+ *
+ * Y el que parece sobrar es el que mas trabaja: `relaxed` no destaca, APAGA. Bajar el
+ * volumen de las materias que van solas es lo que hace visible la que va mal, sin tener
+ * que pintar nada de rojo.
+ *
+ * Ninguno toca el COLOR: el color es identidad -"la morada es Calculo"- y si ademas
+ * significara urgencia dejaria de servir para las dos cosas.
+ */
+const ATTENTION_STRIPE: Readonly<Record<AttentionLevel, string | null>> = {
+  critical: 'bg-danger',
+  watch: 'bg-warning',
+  normal: null,
+  relaxed: null,
+};
 
 export const ScheduleDayCard = ({
   day,
@@ -108,6 +132,7 @@ const ClassRow = ({ item, progress, isLast, onSelect }: ClassRowProps) => {
   const { block, subject } = item;
   const location = describeLocation(block);
   const isNow = progress === 'now';
+  const stripe = ATTENTION_STRIPE[subject.attention];
 
   return (
     <button
@@ -117,13 +142,24 @@ const ClassRow = ({ item, progress, isLast, onSelect }: ClassRowProps) => {
       }}
       className={cn(
         ROW_GRID,
-        'group w-full rounded-xl py-1 text-left transition-colors duration-200',
+        'group relative w-full rounded-xl py-1 pl-1.5 text-left transition-colors duration-200',
         'hover:bg-hover focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:outline-none',
         // Lo que ya paso se apaga, no se tacha: sigue siendo consultable.
         progress === 'past' && 'opacity-45',
+        // Y lo que va solo se apaga tambien, para que no compita con lo que no.
+        progress !== 'past' && subject.attention === 'relaxed' && 'opacity-60',
       )}
       aria-label={`${subject.name}, ${formatClassTime(block.startsAt)} a ${formatClassTime(block.endsAt)}`}
     >
+      {/* Franja como pildora flotante, igual que la de prioridad de una tarea: se lee de
+          reojo sin cortar el radio de la fila como haria un borde de lado a lado. */}
+      {stripe !== null && (
+        <span
+          className={cn('absolute top-1 bottom-4 left-0 w-0.5 rounded-full', stripe)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Columna de horas: la de entrada arriba y la de salida abajo del todo, para que
           el hueco entre ambas se lea como la duracion de la clase. */}
       <span className="flex flex-col justify-between py-0.5 text-right">
@@ -155,7 +191,12 @@ const ClassRow = ({ item, progress, isLast, onSelect }: ClassRowProps) => {
           <button>- pero sus hijos son de bloque, y sin esto `space-y` no separa nada. */}
       <span className="block min-w-0 space-y-0.5 pb-3">
         <span className="flex items-center gap-2">
-          <span className="min-w-0 truncate text-[15px] leading-snug font-semibold text-ink">
+          <span
+            className={cn(
+              'min-w-0 truncate text-[15px] leading-snug text-ink',
+              subject.attention === 'critical' ? 'font-bold' : 'font-semibold',
+            )}
+          >
             {subject.name}
           </span>
           {isNow && (
