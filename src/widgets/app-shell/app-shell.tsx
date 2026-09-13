@@ -58,8 +58,8 @@ interface NavigationEntry {
  */
 const NAVIGATION: readonly NavigationEntry[] = [
   { to: '/hoy', label: 'Hoy', icon: CheckSquare, primary: true },
-  { to: '/horario', label: 'Horario', icon: GraduationCap, primary: true },
   { to: '/proximas', label: 'Proximas', icon: Inbox, primary: true },
+  { to: '/horario', label: 'Horario', icon: GraduationCap, primary: true },
   { to: '/calendario', label: 'Calendario', icon: CalendarDays, primary: true },
   {
     to: '/estadisticas',
