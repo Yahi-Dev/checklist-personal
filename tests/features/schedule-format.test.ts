@@ -4,6 +4,8 @@ import type { ScheduleBlock } from '../../src/domain/schedule/schedule-block';
 
 import {
   classProgressAt,
+  describeUpcoming,
+  formatCountdown,
   describeLocation,
   formatClassCount,
   formatClassTime,
@@ -130,5 +132,75 @@ describe('contadores', () => {
   it('cuenta los minutos del dia en hora local', () => {
     expect(minutesOfDay(new Date(2026, 8, 7, 20, 30))).toBe(1230);
     expect(minutesOfDay(new Date(2026, 8, 7, 0, 0))).toBe(0);
+  });
+});
+
+describe('la cuenta atras', () => {
+  it('se dice corta y redonda', () => {
+    // Nadie sale antes porque falten 47 minutos en vez de 45, y un numero que cambia cada
+    // segundo en una tira que se mira de reojo es ruido.
+    expect(formatCountdown(40)).toBe('40 min');
+    expect(formatCountdown(70)).toBe('1 h 10 min');
+    expect(formatCountdown(120)).toBe('2 h');
+    expect(formatCountdown(0)).toBe('0 min');
+  });
+
+  it('nunca da un numero negativo', () => {
+    expect(formatCountdown(-15)).toBe('0 min');
+  });
+});
+
+describe('como se anuncia la proxima clase', () => {
+  const base = {
+    item: { block: { startsAt: '20:00' } },
+    weekday: 4 as const,
+  } as unknown as Parameters<typeof describeUpcoming>[0];
+
+  it('la que esta en curso se anuncia por lo que QUEDA', () => {
+    // Sentado en el aula, lo unico que quieres saber es cuanto falta para salir.
+    const texto = describeUpcoming({
+      ...base,
+      daysAhead: 0,
+      isNow: true,
+      minutesUntilStart: -35,
+      minutesUntilEnd: 25,
+    });
+
+    expect(texto).toBe('Ahora · termina en 25 min');
+  });
+
+  it('la de hoy, por lo que falta', () => {
+    const texto = describeUpcoming({
+      ...base,
+      daysAhead: 0,
+      isNow: false,
+      minutesUntilStart: 40,
+      minutesUntilEnd: 160,
+    });
+
+    expect(texto).toBe('En 40 min');
+  });
+
+  it('a partir de mañana se nombra el dia, no las horas', () => {
+    // "En 19 h 40 min" es correcto y no le dice nada a nadie.
+    expect(
+      describeUpcoming({
+        ...base,
+        daysAhead: 1,
+        isNow: false,
+        minutesUntilStart: 1180,
+        minutesUntilEnd: 1300,
+      }),
+    ).toBe('Mañana a las 8:00 pm');
+
+    expect(
+      describeUpcoming({
+        ...base,
+        daysAhead: 3,
+        isNow: false,
+        minutesUntilStart: 5000,
+        minutesUntilEnd: 5120,
+      }),
+    ).toBe('El jueves a las 8:00 pm');
   });
 });

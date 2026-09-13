@@ -36,6 +36,13 @@ export interface PreferencesState {
   installPromptDismissed: boolean;
   /** Minutos de antelacion del recordatorio automatico al poner una hora. */
   defaultReminderLeadMinutes: number;
+  /**
+   * Minutos de antelacion del aviso antes de clase. 0 lo apaga.
+   *
+   * Quince por defecto: lo justo para levantarse y llegar, sin que suene tan pronto que
+   * se olvide antes de que sirva de nada.
+   */
+  classReminderLeadMinutes: number;
 
   setTheme: (theme: ThemeMode) => void;
   setSortMode: (mode: SortMode) => void;
@@ -46,6 +53,7 @@ export interface PreferencesState {
   markNotificationsRequested: () => void;
   dismissInstallPrompt: () => void;
   setDefaultReminderLead: (minutes: number) => void;
+  setClassReminderLead: (minutes: number) => void;
   reset: () => void;
 }
 
@@ -59,6 +67,7 @@ const INITIAL = {
   notificationsRequested: false,
   installPromptDismissed: false,
   defaultReminderLeadMinutes: 10,
+  classReminderLeadMinutes: 15,
 };
 
 export const usePreferences = create<PreferencesState>()(
@@ -78,6 +87,8 @@ export const usePreferences = create<PreferencesState>()(
       markNotificationsRequested: () => set({ notificationsRequested: true }),
       dismissInstallPrompt: () => set({ installPromptDismissed: true }),
       setDefaultReminderLead: (defaultReminderLeadMinutes) => set({ defaultReminderLeadMinutes }),
+
+      setClassReminderLead: (classReminderLeadMinutes) => set({ classReminderLeadMinutes }),
 
       reset: () => set(INITIAL),
     }),

@@ -1,6 +1,7 @@
 import type { ScheduleBlock } from '../../domain/schedule/schedule-block';
 import type { ScheduleDay } from '../../domain/schedule/weekly-schedule';
 import type { TimeOfDay } from '../../domain/schedule/value-objects/time-of-day';
+import type { UpcomingClass } from '../../domain/schedule/next-class';
 import type { Weekday } from '../../domain/recurrence/recurrence-rule';
 import { describeRoom } from '../../domain/schedule/schedule-block';
 import { timeToMinutes } from '../../domain/schedule/value-objects/time-of-day';
@@ -125,3 +126,41 @@ export const classProgressAt = (
 /** Total de clases de la semana. Alimenta el subtitulo de la cabecera. */
 export const countClasses = (days: readonly ScheduleDay[]): number =>
   days.reduce((total, day) => total + day.classes.length, 0);
+
+/**
+ * Una cuenta atras corta: `40 min`, `1 h 10 min`, `3 h`.
+ *
+ * Sin decimales y sin segundos. Nadie sale antes porque falten 47 minutos en vez de 45, y
+ * un numero que cambia cada segundo en una tira que se mira de reojo es ruido.
+ */
+export const formatCountdown = (minutes: number): string => {
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+
+  if (hours === 0) return `${String(rest)} min`;
+  if (rest === 0) return `${String(hours)} h`;
+
+  return `${String(hours)} h ${String(rest)} min`;
+};
+
+/**
+ * Cuando es la proxima clase, dicho como lo diria una persona.
+ *
+ * La clase EN CURSO se anuncia por lo que queda, no por lo que lleva: sentado en el aula,
+ * lo unico que quieres saber es cuanto falta para salir.
+ *
+ * A partir de cierta distancia la cuenta atras deja de servir -"en 19 h 40 min" no le
+ * dice nada a nadie- y se pasa a nombrar el dia y la hora.
+ */
+export const describeUpcoming = (upcoming: UpcomingClass): string => {
+  if (upcoming.isNow) return `Ahora · termina en ${formatCountdown(upcoming.minutesUntilEnd)}`;
+
+  if (upcoming.daysAhead === 0) return `En ${formatCountdown(upcoming.minutesUntilStart)}`;
+
+  const at = formatClassTime(upcoming.item.block.startsAt);
+
+  if (upcoming.daysAhead === 1) return `Mañana a las ${at}`;
+
+  return `El ${weekdayLabel(upcoming.weekday).toLocaleLowerCase('es')} a las ${at}`;
+};

@@ -264,6 +264,23 @@ export const SettingsPage = () => {
             />
           </Field>
 
+          <Field
+            label="Avisar antes de clase"
+            hint="Minutos de antelacion del aviso del horario, con el aula. 0 lo apaga."
+          >
+            <Input
+              type="number"
+              min={0}
+              max={180}
+              value={preferences.classReminderLeadMinutes}
+              onChange={(event) =>
+                preferences.setClassReminderLead(Math.max(0, Number(event.target.value) || 0))
+              }
+              className="w-28"
+              inputMode="numeric"
+            />
+          </Field>
+
           <div className="rounded-lg bg-sunken p-3 text-xs text-ink-soft">
             <p className="flex items-center gap-1.5 font-medium text-ink">
               <Smartphone className="size-3.5" />

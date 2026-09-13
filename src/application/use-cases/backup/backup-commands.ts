@@ -11,6 +11,7 @@ import type { Task } from '../../../domain/task/task';
 import type { UseCase, UseCaseContext } from '../use-case';
 
 import { BACKUP_FORMAT_ID, BACKUP_VERSION, backupFileSchema } from './backup-schema';
+import { DEFAULT_CLASS_REMINDER_LEAD_MINUTES } from '../../services/class-reminder-scheduler';
 import { DomainErrors } from '../../../domain/shared/domain-error';
 import { err, isErr, ok } from '../../../domain/shared/result';
 
@@ -253,6 +254,11 @@ export class ImportBackupUseCase implements UseCase<ImportBackupCommand, ImportB
     if (isErr(savedAttendance)) return savedAttendance;
 
     await this.context.reminders.rebuildAll();
+    /* `rebuildAll` de tareas empieza por `cancelAll()`, que se lleva tambien los avisos
+       de clase. Sin esta linea, restaurar un respaldo los dejaria borrados en silencio
+       hasta el siguiente arranque. Se reconstruyen con la antelacion por defecto porque
+       aqui no hay acceso a las preferencias; el arranque los ajusta a la del usuario. */
+    await this.context.classReminders.rebuildAll(DEFAULT_CLASS_REMINDER_LEAD_MINUTES);
 
     return ok({
       imported: {

@@ -22,6 +22,7 @@ import {
   wasCompletedOnSpec,
 } from '../domain/task/task-specifications';
 import { PageContent, PageHeader } from '../shared/ui/layout';
+import { NextClassStrip } from '../features/schedule/next-class-strip';
 import { QuickCaptureBar } from '../features/quick-capture/quick-capture-bar';
 import { SORT_MODE_LABEL, SORT_MODES } from '../domain/task/task-sorting';
 import { SyncIndicator } from '../widgets/sync-indicator/sync-indicator';
@@ -175,6 +176,13 @@ export const TodayPage = () => {
       </PageHeader>
 
       <PageContent>
+        {/* Fuera del `if` de las tareas y ANTES que el: la proxima clase se enseña
+            tambien -sobre todo- el dia que no hay nada pendiente, que es justo cuando esta
+            pantalla se queda vacia. */}
+        <div className="mb-4">
+          <NextClassStrip />
+        </div>
+
         {tasks === undefined ? (
           <TaskListSkeleton />
         ) : pendingCount === 0 ? (

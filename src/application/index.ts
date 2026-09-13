@@ -2,6 +2,7 @@ export * from './parsing/quick-capture-parser';
 export * from './parsing/unibe-schedule-parser';
 export * from './ports/repositories';
 export * from './ports/services';
+export * from './services/class-reminder-scheduler';
 export * from './services/reminder-scheduler';
 export * from './use-cases/backup/backup-commands';
 export * from './use-cases/backup/backup-schema';

@@ -24,6 +24,7 @@ import { getSupabaseClient, isSupabaseConfigured } from '../supabase/client';
 import { LocalAuthService, NullSyncService } from '../auth/local-auth-service';
 import { Outbox } from '../persistence/outbox';
 import { PdfjsTextExtractor } from '../pdf/pdfjs-text-extractor';
+import { ClassReminderScheduler } from '../../application/services/class-reminder-scheduler';
 import { ReminderScheduler } from '../../application/services/reminder-scheduler';
 import { SupabaseAuthService } from '../supabase/supabase-auth-service';
 import { SupabaseFileStorage, UnavailableFileStorage } from '../supabase/supabase-file-storage';
@@ -86,6 +87,7 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
     bridge === null ? new WebNotificationService() : new ElectronNotificationService(bridge);
 
   const reminders = new ReminderScheduler(notifications, tasks, clock);
+  const classReminders = new ClassReminderScheduler(notifications, subjects, scheduleBlocks, clock);
 
   const cloudEnabled = isSupabaseConfigured();
 
@@ -118,6 +120,7 @@ export const createContainer = (database: AppDatabase = db): AppContainer => {
     ids,
     notifications,
     reminders,
+    classReminders,
     files,
     platform,
     advisor,

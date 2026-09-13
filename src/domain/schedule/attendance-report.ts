@@ -41,14 +41,29 @@ export const expectedSessions = (
   block: ScheduleBlock,
   subject: Subject,
   until: CalendarDate,
+): readonly ExpectedSession[] => sessionsBetween(block, subject, null, until);
+
+/**
+ * Las sesiones de un tramo dentro de una ventana, recortada por el cuatrimestre.
+ *
+ * `from` a `null` significa "desde que empieza el cuatrimestre", que es lo que quiere el
+ * recuento de faltas. Los avisos, en cambio, piden una ventana corta hacia adelante: sin
+ * este parametro habria que generar el semestre entero para quedarse con tres dias.
+ */
+export const sessionsBetween = (
+  block: ScheduleBlock,
+  subject: Subject,
+  from: CalendarDate | null,
+  until: CalendarDate,
 ): readonly ExpectedSession[] => {
-  const startsOn = block.startsOn ?? subject.startsOn;
+  const termStart = block.startsOn ?? subject.startsOn;
   const endsOn = block.endsOn ?? subject.endsOn;
 
   // Sin fechas no hay calendario posible. Se devuelve vacio en vez de inventarlo: mejor
   // no decir nada que dar un recuento sobre un rango imaginado.
-  if (startsOn === null) return [];
+  if (termStart === null) return [];
 
+  const startsOn = from === null || from < termStart ? termStart : from;
   const last = endsOn === null || until < endsOn ? until : endsOn;
   if (last < startsOn) return [];
 

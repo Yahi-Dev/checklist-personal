@@ -18,6 +18,7 @@ import type {
   PlatformService,
 } from '../ports/services';
 import type { IdGenerator } from '../../domain/shared/id-generator';
+import type { ClassReminderScheduler } from '../services/class-reminder-scheduler';
 import type { ReminderScheduler } from '../services/reminder-scheduler';
 import type { Result } from '../../domain/shared/result';
 
@@ -59,6 +60,7 @@ export interface UseCaseContext {
   readonly ids: IdGenerator;
   readonly notifications: NotificationService;
   readonly reminders: ReminderScheduler;
+  readonly classReminders: ClassReminderScheduler;
   readonly files: FileStorageService;
   readonly platform: PlatformService;
   readonly advisor: PlanningAdvisorService;

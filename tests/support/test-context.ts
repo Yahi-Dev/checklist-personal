@@ -50,6 +50,7 @@ import { FixedClock } from '../../src/domain/shared/clock';
 import { bySubjectNoteOrder } from '../../src/domain/schedule/subject-note';
 import { DomainErrors } from '../../src/domain/shared/domain-error';
 import { err, ok } from '../../src/domain/shared/result';
+import { ClassReminderScheduler } from '../../src/application/services/class-reminder-scheduler';
 import { ReminderScheduler } from '../../src/application/services/reminder-scheduler';
 import { SequentialIdGenerator } from '../../src/domain/shared/id-generator';
 
@@ -490,6 +491,12 @@ export const createTestHarness = (
     ids,
     advisor,
     notifications: notifications as unknown as UseCaseContext['notifications'],
+    classReminders: new ClassReminderScheduler(
+      notifications as unknown as UseCaseContext['notifications'],
+      subjects,
+      scheduleBlocks,
+      clock,
+    ),
     reminders: new ReminderScheduler(
       notifications as unknown as UseCaseContext['notifications'],
       tasks,

@@ -66,9 +66,18 @@ const DesktopIntegration = () => {
 
   // Reconstruye los recordatorios al arrancar: los temporizadores no sobreviven a un
   // cierre de la app, asi que hay que volver a programarlos desde los datos.
+  //
+  // EL ORDEN IMPORTA. `reminders.rebuildAll()` empieza por `cancelAll()`, que borra TODOS
+  // los avisos programados, tambien los de clase. Por eso los de clase se reconstruyen
+  // despues; al reves, se borrarian nada mas crearlos.
+  const classReminderLead = usePreferences((state) => state.classReminderLeadMinutes);
+
   useEffect(() => {
-    void container.context.reminders.rebuildAll();
-  }, [container]);
+    void (async () => {
+      await container.context.reminders.rebuildAll();
+      await container.context.classReminders.rebuildAll(classReminderLead);
+    })();
+  }, [container, classReminderLead]);
 
   return null;
 };
