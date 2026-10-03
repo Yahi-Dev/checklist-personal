@@ -1,6 +1,8 @@
 import { CheckSquare, Mail } from 'lucide-react';
 import { toast } from 'sonner';
-import { useState, type SyntheticEvent } from 'react';
+import { lazy, Suspense, useState, type SyntheticEvent } from 'react';
+
+import type { ShinyTextProps } from '../shared/ui/shiny-text';
 
 import { Button } from '../shared/ui/button';
 import { Card, CardContent } from '../shared/ui/layout';
@@ -8,8 +10,27 @@ import { getAuthCallbackError } from '../infrastructure/supabase/auth-callback';
 import { Field, Input, PasswordInput } from '../shared/ui/form-controls';
 import { getContainer } from '../infrastructure/di/container';
 import { isErr } from '../domain/shared/result';
+import { useMediaQuery } from '../shared/hooks/use-media-query';
 
 type Mode = 'sign-in' | 'sign-up' | 'magic-link';
+
+const TITLE = 'Checklist Personal';
+
+/** El titulo quieto, en el mismo color base del brillo: lo que se ve mientras carga. */
+const StillTitle = ({ text }: ShinyTextProps) => (
+  <span style={{ color: 'var(--ink-shine-base)' }}>{text}</span>
+);
+
+/**
+ * El brillo del titulo llega en diferido: `motion` solo se usa aqui y en el fondo, y no
+ * tiene por que viajar en el arranque de quien ya tiene sesion. Si no se puede cargar,
+ * se queda el titulo quieto.
+ */
+const ShinyText = lazy(() =>
+  import('../shared/ui/shiny-text')
+    .then((module) => ({ default: module.ShinyText }))
+    .catch(() => ({ default: StillTitle })),
+);
 
 /**
  * Acceso.
@@ -39,6 +60,7 @@ export const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(callback?.message ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   const submit = async (event: SyntheticEvent) => {
     event.preventDefault();
@@ -80,7 +102,18 @@ export const LoginPage = () => {
             <CheckSquare className="size-7" strokeWidth={2.5} />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-ink">Checklist Personal</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-ink">
+              <Suspense fallback={<StillTitle text={TITLE} />}>
+                <ShinyText
+                  text={TITLE}
+                  color="var(--ink-shine-base)"
+                  shineColor="var(--ink-shine)"
+                  speed={5}
+                  spread={100}
+                  disabled={reduceMotion}
+                />
+              </Suspense>
+            </h1>
             <p className="mt-1 text-sm text-balance text-ink-soft">
               Tus tareas, sincronizadas entre el telefono y la computadora.
             </p>

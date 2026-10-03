@@ -73,8 +73,14 @@ export default defineConfig(({ mode }) => {
 
                    No queda fuera del alcance sin conexion: `sw.ts` le pone una ruta
                    `CacheFirst`, asi que la primera importacion lo descarga y a partir
-                   de ahi funciona igual en modo avion. */
-                globIgnores: ['**/assets/pdfjs-*.js'],
+                   de ahi funciona igual en modo avion.
+
+                   three.js (la tinta del fondo) queda fuera por la razon contraria: el
+                   telefono no lo usa NUNCA, porque la tinta solo se pinta en escritorio.
+                   Precachearlo seria descargar medio megabyte en cada instalacion y en
+                   cada actualizacion para no usarlo jamas. En escritorio se guarda la
+                   primera vez que se pinta, con su propia ruta en `sw.ts`. */
+                globIgnores: ['**/assets/pdfjs-*.js', '**/assets/three-*.js'],
               },
               devOptions: {
                 enabled: false,
@@ -151,8 +157,15 @@ export default defineConfig(({ mode }) => {
            * es lo que necesitan `globIgnores` y la ruta de cache del service worker.
            */
           chunkFileNames: (chunk) => {
-            const isPdfjs = chunk.moduleIds.some((id) => id.includes('pdfjs-dist'));
-            return isPdfjs ? 'assets/pdfjs-[hash].js' : 'assets/[name]-[hash].js';
+            if (chunk.moduleIds.some((id) => id.includes('pdfjs-dist'))) {
+              return 'assets/pdfjs-[hash].js';
+            }
+            // Igual que pdfjs: asincrono, sin preload y con un nombre que `globIgnores`
+            // y el service worker puedan reconocer.
+            if (chunk.moduleIds.some((id) => /[\\/]node_modules[\\/]three[\\/]/.test(id))) {
+              return 'assets/three-[hash].js';
+            }
+            return 'assets/[name]-[hash].js';
           },
           /* Separar los vendors pesados evita invalidar todo el cache en cada deploy:
              cambiar una linea de la app no deberia obligar al telefono a volver a

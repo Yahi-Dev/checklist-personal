@@ -129,6 +129,24 @@
   --border-subtle: oklch(0.913 0.013 235);
   --border-strong: oklch(0.846 0.019 238);
 
+  /* La tinta liquida del fondo (widgets/ambient-background). Sale de la misma paleta
+     que todo lo demas: celeste para lo lento, morado del anochecer para lo rapido y
+     un celeste casi blanco en los picos. LiquidEther los resuelve al montar, asi que
+     cambian solos con el tema.
+
+     El velo es el propio color del lienzo: lo que calma la tinta detras del texto no
+     es un gris ni un negro, es el cielo de cada tema. */
+  --ink-slow: var(--color-brand-400);
+  --ink-fast: var(--color-accent-400);
+  --ink-peak: var(--color-brand-200);
+  --ink-glow: var(--color-brand-300);
+  --ink-veil: var(--surface-canvas);
+
+  /* El brillo que recorre el titulo del login. De dia el destello NO es blanco: sobre
+     un lienzo blanco haria desaparecer las letras a su paso. */
+  --ink-shine-base: var(--color-brand-700);
+  --ink-shine: var(--color-accent-400);
+
   color-scheme: light;
 }
 
@@ -150,6 +168,16 @@
 
   --border-subtle: oklch(0.315 0.032 260);
   --border-strong: oklch(0.405 0.036 258);
+
+  /* De noche la tinta baja de luz: el celeste profundo es lo que queda de cielo en la
+     oscuridad, y unos picos claros harian de foco en vez de reflejo. */
+  --ink-slow: var(--color-brand-700);
+  --ink-fast: var(--color-accent-500);
+  --ink-peak: var(--color-brand-300);
+  --ink-glow: var(--color-brand-500);
+
+  --ink-shine-base: var(--color-brand-300);
+  --ink-shine: var(--color-brand-50);
 
   color-scheme: dark;
 }

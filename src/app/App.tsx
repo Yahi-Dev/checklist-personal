@@ -1,5 +1,6 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
 
+import { AmbientBackground } from '../widgets/ambient-background/ambient-background';
 import { AppProviders } from './providers/app-providers';
 import { AppRouter } from './router/app-router';
 import { Button } from '../shared/ui/button';
@@ -7,6 +8,7 @@ import { desktopBridge } from '../shared/desktop-bridge';
 import { getContainer } from '../infrastructure/di/container';
 import { isInTodayViewSpec } from '../domain/task/task-specifications';
 import { useAllTasks } from '../shared/hooks/use-live-query';
+import { useAuth } from './providers/auth-provider';
 import { usePreferences } from '../shared/stores/preferences-store';
 
 /**
@@ -16,10 +18,26 @@ export const App = () => (
   <AppErrorBoundary>
     <AppProviders>
       <DesktopIntegration />
+      <AmbientLayer />
       <AppRouter />
     </AppProviders>
   </AppErrorBoundary>
 );
+
+/**
+ * El fondo de tinta, montado UNA vez por encima del login y del shell.
+ *
+ * Aqui y no dentro de cada pantalla: asi el paso del login a la app, y de una ruta a
+ * otra, cambia la intensidad de la misma capa en vez de destruir un contexto WebGL y
+ * crear otro. La condicion es la misma con la que `AppRouter` decide enseñar el login;
+ * mientras se comprueba la sesion se queda en la variante discreta.
+ */
+const AmbientLayer = () => {
+  const { user, isLoading, isCloudEnabled } = useAuth();
+  const showsLogin = !isLoading && user === null && isCloudEnabled;
+
+  return <AmbientBackground variant={showsLogin ? 'login' : 'app'} />;
+};
 
 /**
  * Puentes con el escritorio: contador en el icono y eventos del proceso principal.

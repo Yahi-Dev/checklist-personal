@@ -60,6 +60,22 @@ registerRoute(
 );
 
 /**
+ * three.js: el mismo trato que pdfjs, por otro motivo.
+ *
+ * Tambien queda fuera del precache, pero porque el telefono no lo pide nunca: la tinta
+ * del fondo solo se pinta en escritorio. Ahi, esta ruta lo guarda la primera vez y la
+ * tinta sigue apareciendo sin conexion. Si aun asi faltara, el fondo se queda con el
+ * degradado estatico; nunca rompe la app.
+ */
+registerRoute(
+  ({ url }) => /\/assets\/three-[^/]+\.js$/.test(url.pathname),
+  new CacheFirst({
+    cacheName: 'three',
+    plugins: [new ExpirationPlugin({ maxEntries: 2, purgeOnQuotaError: true })],
+  }),
+);
+
+/**
  * LA VERSION NUEVA ESPERA. NO SE ACTIVA SOLA.
  *
  * Aqui habia un `self.skipWaiting()` suelto, y era un fallo que rompia la app instalada
