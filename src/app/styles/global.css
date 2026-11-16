@@ -210,6 +210,15 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Los buscadores traen su propia X para limpiar: la del navegador salia al lado y
+     quedaban dos. En Safari, ademas, `type="search"` pone su lupa y sus esquinas. */
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+  }
+
   body {
     background-color: var(--surface-canvas);
     color: var(--text-primary);

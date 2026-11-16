@@ -206,11 +206,6 @@ export const SettingsPage = () => {
           </Field>
 
           <ToggleRow
-            label="Ver completadas en las listas"
-            checked={preferences.showCompleted}
-            onChange={preferences.toggleShowCompleted}
-          />
-          <ToggleRow
             label="Agrupar por categoria"
             checked={preferences.groupByCategory}
             onChange={preferences.toggleGroupByCategory}

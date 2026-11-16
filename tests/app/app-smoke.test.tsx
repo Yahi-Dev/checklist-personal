@@ -69,4 +69,45 @@ describe('arranque de la aplicacion', () => {
       { timeout: 5000 },
     );
   }, 20_000);
+
+  /**
+   * La lupa de Hoy y lo completado hoy, de punta a punta.
+   *
+   * Lo completado hoy tiene que seguir en Hoy, plegado, sin depender de ningun ajuste: antes
+   * colgaba de "Ver completadas", que empieza apagado y vive en cada dispositivo, y en un
+   * telefono recien instalado lo hecho hoy desaparecia de la pantalla.
+   */
+  it('la lupa de Hoy filtra las tareas, y lo completado hoy sigue a la vista', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = await screen.findByLabelText(/nueva tarea/i);
+    await user.type(input, 'Llamar a Raffy hoy{Enter}');
+    await user.type(input, 'Pagar la luz hoy{Enter}');
+    await screen.findByText('Llamar a Raffy', undefined, { timeout: 5000 });
+    await screen.findByText('Pagar la luz', undefined, { timeout: 5000 });
+
+    await user.click(screen.getByRole('button', { name: /buscar en hoy/i }));
+    await user.type(screen.getByLabelText(/filtrar las tareas de hoy/i), 'RAFFY');
+    await waitFor(() => {
+      expect(screen.queryByText('Pagar la luz')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Llamar a Raffy')).toBeInTheDocument();
+
+    // Escape cierra la lupa y vuelve todo.
+    await user.keyboard('{Escape}');
+    await screen.findByText('Pagar la luz', undefined, { timeout: 5000 });
+
+    // Completar una: sale de lo pendiente y queda en «Completadas», plegada.
+    await user.click(screen.getByRole('checkbox', { name: 'Completar Pagar la luz' }));
+    const completed = await screen.findByRole(
+      'button',
+      { name: /completadas/i },
+      { timeout: 5000 },
+    );
+    await user.click(completed);
+    expect(
+      await screen.findByRole('checkbox', { name: 'Reabrir Pagar la luz' }, { timeout: 5000 }),
+    ).toBeInTheDocument();
+  }, 30_000);
 });

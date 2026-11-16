@@ -84,6 +84,10 @@ const spawn = (
   node.style.top = `${String(y)}px`;
   node.style.willChange = 'transform, opacity';
   Object.assign(node.style, style);
+
+  // Sin Web Animations (Safari anterior a iOS 13.4, o jsdom en las pruebas) no hay
+  // fiesta, pero completar la tarea no puede romperse por eso.
+  if (typeof node.animate !== 'function') return;
   layer.append(node);
 
   const animation = node.animate(keyframes, { fill: 'forwards', ...options });

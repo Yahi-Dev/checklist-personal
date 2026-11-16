@@ -23,8 +23,6 @@ export interface PreferencesState {
   theme: ThemeMode;
   /** Ordenacion por defecto de las listas. */
   sortMode: SortMode;
-  /** Mostrar las completadas dentro de la lista, en gris. */
-  showCompleted: boolean;
   /** Agrupar por categoria en las vistas de lista. */
   groupByCategory: boolean;
   /** Numero de tareas de hoy en el icono de la barra de tareas. */
@@ -46,7 +44,6 @@ export interface PreferencesState {
 
   setTheme: (theme: ThemeMode) => void;
   setSortMode: (mode: SortMode) => void;
-  toggleShowCompleted: () => void;
   toggleGroupByCategory: () => void;
   setShowBadgeCount: (value: boolean) => void;
   setFocusSettings: (settings: Partial<FocusSettings>) => void;
@@ -60,7 +57,6 @@ export interface PreferencesState {
 const INITIAL = {
   theme: 'system' as ThemeMode,
   sortMode: 'smart' as SortMode,
-  showCompleted: false,
   groupByCategory: false,
   showBadgeCount: true,
   focusSettings: DEFAULT_FOCUS_SETTINGS,
@@ -77,7 +73,6 @@ export const usePreferences = create<PreferencesState>()(
 
       setTheme: (theme) => set({ theme }),
       setSortMode: (sortMode) => set({ sortMode }),
-      toggleShowCompleted: () => set((state) => ({ showCompleted: !state.showCompleted })),
       toggleGroupByCategory: () => set((state) => ({ groupByCategory: !state.groupByCategory })),
       setShowBadgeCount: (showBadgeCount) => set({ showBadgeCount }),
 

@@ -1,5 +1,14 @@
-import { AlarmClock, Filter, ListFilter, PartyPopper, Sparkles } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  AlarmClock,
+  Filter,
+  ListFilter,
+  PartyPopper,
+  Search,
+  SearchX,
+  Sparkles,
+  X,
+} from 'lucide-react';
+import { useDeferredValue, useMemo, useState } from 'react';
 
 import type { Task } from '../domain/task/task';
 
@@ -15,12 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '../shared/ui/overlays';
 import { EmptyState, TaskListSkeleton } from '../shared/ui/feedback';
-import {
-  isDueOnDaySpec,
-  isOverdueSpec,
-  isPendingSpec,
-  wasCompletedOnSpec,
-} from '../domain/task/task-specifications';
+import { Input } from '../shared/ui/form-controls';
 import { PageContent, PageHeader } from '../shared/ui/layout';
 import { NextClassStrip } from '../features/schedule/next-class-strip';
 import { QuickCaptureBar } from '../features/quick-capture/quick-capture-bar';
@@ -28,8 +32,11 @@ import { SORT_MODE_LABEL, SORT_MODES } from '../domain/task/task-sorting';
 import { SyncIndicator } from '../widgets/sync-indicator/sync-indicator';
 import { TaskDetailSheet } from '../features/task-detail/task-detail-sheet';
 import { TaskList } from '../features/task-list/task-list';
+import { buildTodayView } from '../features/today/today-view';
 import { useAllTasks } from '../shared/hooks/use-live-query';
+import { useFilters } from '../shared/stores/filter-store';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNow } from '../shared/hooks/use-now';
 import { usePreferences } from '../shared/stores/preferences-store';
 
 /**
@@ -38,6 +45,13 @@ import { usePreferences } from '../shared/stores/preferences-store';
  * Lo ATRASADO va arriba y separado. Es la decision que define esta pantalla: una
  * tarea vencida escondida entre las de hoy se convierte en una tarea que no existe.
  * Separandola, la pregunta "¿que se me paso?" se responde sin buscar.
+ *
+ * Lo completado hoy va al final y plegado, SIEMPRE. Antes dependia de "Ver completadas",
+ * que empieza apagada y se guarda por dispositivo: en un telefono nuevo, o con el
+ * almacenamiento borrado, lo hecho hoy desaparecia de la pantalla sin explicacion.
+ *
+ * La lupa filtra lo que ya esta en Hoy. Tambien es la puerta a Buscar en el movil y en
+ * ventanas estrechas, donde la barra lateral -el unico sitio que la enlazaba- no existe.
  */
 export const TodayPage = () => {
   const tasks = useAllTasks();
@@ -56,41 +70,38 @@ export const TodayPage = () => {
 
   const sortMode = usePreferences((state) => state.sortMode);
   const setSortMode = usePreferences((state) => state.setSortMode);
-  const showCompleted = usePreferences((state) => state.showCompleted);
-  const toggleShowCompleted = usePreferences((state) => state.toggleShowCompleted);
   const groupByCategory = usePreferences((state) => state.groupByCategory);
   const toggleGroupByCategory = usePreferences((state) => state.toggleGroupByCategory);
 
-  const now = useMemo(() => new Date(), []);
+  /* El reloj avanza: la ventana de escritorio pasa dias abierta, y con un `new Date()`
+     congelado al montar, despues de medianoche "completadas hoy" seguia siendo ayer. */
+  const nowMs = useNow();
+  const now = useMemo(() => new Date(nowMs), [nowMs]);
 
-  const { overdue, today, completedToday } = useMemo(() => {
-    if (tasks === undefined) return { overdue: [], today: [], completedToday: [] };
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const searching = deferredQuery.trim().length > 0;
+  const setSearchQuery = useFilters((state) => state.setQuery);
 
-    const overdueSpec = isOverdueSpec(now.toISOString());
-    const todaySpec = isDueOnDaySpec(now);
-    const pendingSpec = isPendingSpec();
-    const completedTodaySpec = wasCompletedOnSpec(now);
+  const { overdue, today, completedToday } = useMemo(
+    () =>
+      tasks === undefined
+        ? { overdue: [], today: [], completedToday: [] }
+        : buildTodayView(tasks, now, deferredQuery),
+    [tasks, now, deferredQuery],
+  );
 
-    const overdueTasks: Task[] = [];
-    const todayTasks: Task[] = [];
-    const doneToday: Task[] = [];
+  const closeSearch = () => {
+    setQuery('');
+    setSearchOpen(false);
+  };
 
-    for (const task of tasks) {
-      if (task.status === 'completed') {
-        if (completedTodaySpec.isSatisfiedBy(task)) doneToday.push(task);
-        continue;
-      }
-
-      if (!pendingSpec.isSatisfiedBy(task)) continue;
-
-      // Lo atrasado gana a lo de hoy: una tarea de esta mañana ya pasada cuenta como
-      // atrasada, no como pendiente del dia, y tiene que salir en el bloque de arriba.
-      if (overdueSpec.isSatisfiedBy(task)) overdueTasks.push(task);
-      else if (todaySpec.isSatisfiedBy(task)) todayTasks.push(task);
-    }
-
-    return { overdue: overdueTasks, today: todayTasks, completedToday: doneToday };
-  }, [tasks, now]);
+  /** A Buscar con el mismo texto: lo que no esta en Hoy puede estar en cualquier otra parte. */
+  const searchEverywhere = () => {
+    setSearchQuery(query);
+    void navigate('/buscar');
+  };
 
   const openTask = (task: Task) => {
     setSelected(task);
@@ -139,6 +150,16 @@ export const TodayPage = () => {
               <SyncIndicator compact />
             </div>
 
+            <Button
+              variant={searchOpen || query.length > 0 ? 'primary' : 'ghost'}
+              size="icon"
+              aria-label="Buscar en Hoy"
+              aria-expanded={searchOpen}
+              onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+            >
+              <Search className="size-4.5" />
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Opciones de la lista">
@@ -159,10 +180,6 @@ export const TodayPage = () => {
                 ))}
 
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={toggleShowCompleted}>
-                  <Filter />
-                  {showCompleted ? 'Ocultar completadas' : 'Ver completadas'}
-                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={toggleGroupByCategory}>
                   <Filter />
                   {groupByCategory ? 'No agrupar' : 'Agrupar por categoria'}
@@ -173,6 +190,43 @@ export const TodayPage = () => {
         }
       >
         <QuickCaptureBar />
+
+        {searchOpen && (
+          <div className="mt-3 animate-fade-in space-y-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') closeSearch();
+                }}
+                placeholder="Filtrar las tareas de hoy..."
+                className="pr-9 pl-9"
+                type="search"
+                autoFocus
+                aria-label="Filtrar las tareas de hoy"
+              />
+              {query.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-ink-muted hover:text-ink"
+                  aria-label="Limpiar busqueda"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={searchEverywhere}
+              className="px-1 text-xs font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+            >
+              Buscar en todas las tareas
+            </button>
+          </div>
+        )}
       </PageHeader>
 
       <PageContent>
@@ -185,16 +239,35 @@ export const TodayPage = () => {
 
         {tasks === undefined ? (
           <TaskListSkeleton />
-        ) : pendingCount === 0 ? (
+        ) : searching && pendingCount === 0 && completedToday.length === 0 ? (
           <EmptyState
-            icon={completedToday.length > 0 ? <PartyPopper /> : <Sparkles />}
-            title={
-              completedToday.length > 0
-                ? `Dia despejado. ${completedToday.length} ${completedToday.length === 1 ? 'tarea completada' : 'tareas completadas'}.`
-                : 'Nada pendiente para hoy'
+            icon={<SearchX />}
+            title={`Nada de hoy coincide con «${deferredQuery.trim()}»`}
+            description="Puede estar en otro dia, o ya completada antes de hoy."
+            action={
+              <Button variant="secondary" onClick={searchEverywhere}>
+                <Search className="size-4" />
+                Buscar en todas las tareas
+              </Button>
             }
-            description="Escribe arriba para apuntar algo. Prueba con: reunion mañana 10am !alta"
           />
+        ) : pendingCount === 0 ? (
+          <>
+            <EmptyState
+              icon={completedToday.length > 0 ? <PartyPopper /> : <Sparkles />}
+              title={
+                completedToday.length > 0
+                  ? `Dia despejado. ${completedToday.length} ${completedToday.length === 1 ? 'tarea completada' : 'tareas completadas'}.`
+                  : 'Nada pendiente para hoy'
+              }
+              description={
+                searching
+                  ? undefined
+                  : 'Escribe arriba para apuntar algo. Prueba con: reunion mañana 10am !alta'
+              }
+            />
+            <CompletedToday tasks={completedToday} onOpenTask={openTask} />
+          </>
         ) : (
           <div className="space-y-6">
             {overdue.length > 0 && (
@@ -233,9 +306,7 @@ export const TodayPage = () => {
               />
             </section>
 
-            {showCompleted && completedToday.length > 0 && (
-              <TaskList tasks={completedToday} showCompleted onOpenTask={openTask} emptyTitle="" />
-            )}
+            <CompletedToday tasks={completedToday} onOpenTask={openTask} />
           </div>
         )}
       </PageContent>
@@ -244,3 +315,15 @@ export const TodayPage = () => {
     </>
   );
 };
+
+/** Lo completado hoy: al final y plegado, como en el resto de listas. */
+const CompletedToday = ({
+  tasks,
+  onOpenTask,
+}: {
+  tasks: readonly Task[];
+  onOpenTask: (task: Task) => void;
+}) =>
+  tasks.length === 0 ? null : (
+    <TaskList tasks={tasks} showCompleted onOpenTask={onOpenTask} emptyTitle="" />
+  );
