@@ -84,19 +84,24 @@ describe('arranque de la aplicacion', () => {
     const input = await screen.findByLabelText(/nueva tarea/i);
     await user.type(input, 'Llamar a Raffy hoy{Enter}');
     await user.type(input, 'Pagar la luz hoy{Enter}');
-    await screen.findByText('Llamar a Raffy', undefined, { timeout: 5000 });
-    await screen.findByText('Pagar la luz', undefined, { timeout: 5000 });
+
+    // Se busca la casilla de cada tarea y no su texto: el aviso de "creada" repite el
+    // titulo, y mientras sigue en pantalla el texto aparece dos veces.
+    const checkbox = (name: string) => screen.queryByRole('checkbox', { name });
+    const wait = { timeout: 5000 };
+    await screen.findByRole('checkbox', { name: 'Completar Llamar a Raffy' }, wait);
+    await screen.findByRole('checkbox', { name: 'Completar Pagar la luz' }, wait);
 
     await user.click(screen.getByRole('button', { name: /buscar en hoy/i }));
     await user.type(screen.getByLabelText(/filtrar las tareas de hoy/i), 'RAFFY');
     await waitFor(() => {
-      expect(screen.queryByText('Pagar la luz')).not.toBeInTheDocument();
-    });
-    expect(screen.getByText('Llamar a Raffy')).toBeInTheDocument();
+      expect(checkbox('Completar Pagar la luz')).not.toBeInTheDocument();
+    }, wait);
+    expect(checkbox('Completar Llamar a Raffy')).toBeInTheDocument();
 
     // Escape cierra la lupa y vuelve todo.
     await user.keyboard('{Escape}');
-    await screen.findByText('Pagar la luz', undefined, { timeout: 5000 });
+    await screen.findByRole('checkbox', { name: 'Completar Pagar la luz' }, wait);
 
     // Completar una: sale de lo pendiente y queda en «Completadas», plegada.
     await user.click(screen.getByRole('checkbox', { name: 'Completar Pagar la luz' }));
